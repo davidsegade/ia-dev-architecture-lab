@@ -66,10 +66,12 @@ runs:
     - name: Verify
       id: verify
       run: |
-        node ia-dev/controller/gate.mjs "$TASK" target/bundle/change.patch > target/bundle/acceptance-result.json
-        node -e 'const fs=require("fs"); const r=JSON.parse(fs.readFileSync("target/bundle/acceptance-result.json")); fs.appendFileSync(process.env.GITHUB_OUTPUT,`digest=${r.digest}\n`);'
+        node "$IA_DEV_ENGINE"/controller/gate.mjs "$TASK" bundle/change.patch > bundle/acceptance-result.json
+        node -e 'const fs=require("fs"); const r=JSON.parse(fs.readFileSync("bundle/acceptance-result.json")); fs.appendFileSync(process.env.GITHUB_OUTPUT,`digest=${r.digest}\n`);'
       shell: bash
+      working-directory: target
       env:
+        IA_DEV_ENGINE: ${{ github.workspace }}/ia-dev
         TASK: ${{ inputs.task }}
         ALLOWED_PATHS: ${{ inputs.allowed-paths }}
         PROTECTED_PATHS: ${{ inputs.protected-paths }}

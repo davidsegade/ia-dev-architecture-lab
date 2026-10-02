@@ -60,9 +60,11 @@ runs:
         name: execution
         path: target/bundle
     - name: Gate check
-      run: node ia-dev/controller/gate.mjs "$TASK" target/bundle/change.patch
+      run: node "$IA_DEV_ENGINE"/controller/gate.mjs "$TASK" bundle/change.patch
       shell: bash
+      working-directory: target
       env:
+        IA_DEV_ENGINE: ${{ github.workspace }}/ia-dev
         TASK: ${{ inputs.task }}
         ALLOWED_PATHS: ${{ inputs.allowed-paths }}
         PROTECTED_PATHS: ${{ inputs.protected-paths }}
@@ -75,9 +77,11 @@ runs:
       shell: bash
       working-directory: target
     - name: Review agent
-      run: node ia-dev/controller/agent.mjs review "$TASK"
+      run: node "$IA_DEV_ENGINE"/controller/agent.mjs review "$TASK"
       shell: bash
+      working-directory: target
       env:
+        IA_DEV_ENGINE: ${{ github.workspace }}/ia-dev
         TASK: ${{ inputs.task }}
         OPENCODE_BIN: ${{ runner.temp }}/opencode/node_modules/.bin/opencode
         ALLOWED_PATHS: ${{ inputs.allowed-paths }}

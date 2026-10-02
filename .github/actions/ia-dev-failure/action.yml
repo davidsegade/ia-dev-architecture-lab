@@ -51,9 +51,11 @@ runs:
         merge-multiple: true
         path: target/bundle
     - name: Report failure
-      run: node ia-dev/controller/github.mjs failure
+      run: node "$IA_DEV_ENGINE"/controller/github.mjs failure
       shell: bash
+      working-directory: target
       env:
+        IA_DEV_ENGINE: ${{ github.workspace }}/ia-dev
         GH_TOKEN: ${{ inputs.target-token }}
         GITHUB_REPOSITORY: ${{ inputs.target-repo }}
         ISSUE_NUMBER: ${{ inputs.issue-number }}
