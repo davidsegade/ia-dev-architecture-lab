@@ -31,7 +31,6 @@ function loadConfig() {
   const repos = {};
   let currentRepo = null;
   let currentKey = null;
-  let indent = 0;
   
   for (const line of yaml.split('\n')) {
     const match = line.match(/^(\s*)(\w[\w-]*):\s*(.*)$/);
@@ -42,30 +41,23 @@ function loadConfig() {
     if (level === 1) {
       currentRepo = key;
       repos[currentRepo] = {};
-      currentKey = null;
     } else if (level === 2 && currentRepo) {
-      currentKey = key;
       if (value === '') {
-        repos[currentRepo][currentKey] = [];
+        repos[currentRepo][key] = [];
       } else {
-        repos[currentRepo][currentKey] = value.replace(/^["']|["']$/g, '');
+        repos[currentRepo][key] = value.replace(/^["']|["']$/g, '');
       }
-    } else if (level === 3 && currentRepo && currentKey) {
+    } else if (level === 3 && currentRepo) {
       const item = line.trim().replace(/^-\s*/, '').replace(/^["']|["']$/g, '');
-      if (Array.isArray(repos[currentRepo][currentKey])) {
-        repos[currentRepo][currentKey].push(item);
-      }
-    } else if (level === 4 && currentRepo && currentKey && Array.isArray(repos[currentRepo][currentKey])) {
-      // nested array items (e.g., tasks)
-      const item = line.trim().replace(/^-\s*/, '');
-      const lastIdx = repos[currentRepo][currentKey].length - 1;
-      if (typeof repos[currentRepo][currentKey][lastIdx] === 'object') {
-        const taskMatch = item.match(/^(\w+):\s*(.*)$/);
-        if (taskMatch) {
-          repos[currentRepo][currentKey][lastIdx][taskMatch[1]] = taskMatch[2].replace(/^["']|["']$/g, '');
+      const arrKey = Object.keys(repos[currentRepo]).find(k => Array.isArray(repos[currentRepo][k]));
+      if (arrKey && Array.isArray(repos[currentRepo][arrKey])) {
+        // Check if item contains a key-value pair (task: "description")
+        const kvMatch = item.match(/^(\w+):\s*(.*)$/);
+        if (kvMatch) {
+          repos[currentRepo][arrKey].push({ [kvMatch[1]]: kvMatch[2].replace(/^["']|["']$/g, '') });
+        } else {
+          repos[currentRepo][arrKey].push(item);
         }
-      } else {
-        repos[currentRepo][currentKey][lastIdx] = { [item]: '' };
       }
     }
   }
