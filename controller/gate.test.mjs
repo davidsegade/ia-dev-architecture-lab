@@ -38,7 +38,7 @@ export function chunk(v,s){return [v]}; export function sumCents(v){return 0};`)
 }));
 test('symlink candidate is rejected',()=>fixture(directory=>{
   rmSync(join(directory,'src/main.mjs')); symlinkSync(join(root,'src/main.mjs'),join(directory,'src/main.mjs'));
-  assert.throws(()=>verify(root,'clamp',directory),/Regular files/);
+  assert.throws(()=>verify(root,'clamp',directory),/Regular file/);
 }));
 test('hanging candidate is terminated',()=>fixture(directory=>{
   writeFileSync(join(directory,'src/main.mjs'),'while(true){}');

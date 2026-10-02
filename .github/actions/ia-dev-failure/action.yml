@@ -1,0 +1,59 @@
+name: 'IA DEV Failure'
+description: 'Report IA DEV failure and trigger retry if applicable'
+inputs:
+  target-repo:
+    description: 'Target repository'
+    required: true
+  target-token:
+    description: 'Token for target repo'
+    required: true
+  base-sha:
+    description: 'Base SHA'
+    required: true
+  issue-number:
+    description: 'Issue number'
+    required: true
+  skip:
+    description: 'Whether execution was skipped'
+    required: true
+  prepare-result:
+    description: 'Prepare job result'
+    required: true
+  publish-result:
+    description: 'Publish job result'
+    required: true
+runs:
+  using: 'composite'
+  steps:
+    - name: Checkout target repo at base SHA
+      uses: actions/checkout@v4
+      with:
+        repository: ${{ inputs.target-repo }}
+        ref: ${{ inputs.base-sha }}
+        persist-credentials: false
+        path: target
+    - name: Checkout controller repo
+      uses: actions/checkout@v4
+      with:
+        repository: davidsegade/ia-dev-architecture-lab
+        ref: main
+        path: ia-dev
+        persist-credentials: false
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: '24'
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
+      continue-on-error: true
+      with:
+        pattern: '*'
+        merge-multiple: true
+        path: target/bundle
+    - name: Report failure
+      run: node ia-dev/controller/github.mjs failure
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.target-token }}
+        GITHUB_REPOSITORY: ${{ inputs.target-repo }}
+        ISSUE_NUMBER: ${{ inputs.issue-number }}

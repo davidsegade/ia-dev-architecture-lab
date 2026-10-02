@@ -1,0 +1,77 @@
+name: 'IA DEV Verify'
+description: 'Verify IA DEV execution with independent acceptance tests'
+inputs:
+  task:
+    description: 'Task name'
+    required: true
+  target-repo:
+    description: 'Target repository'
+    required: true
+  target-token:
+    description: 'Token for target repo'
+    required: true
+  base-sha:
+    description: 'Base SHA'
+    required: true
+  allowed-paths:
+    description: 'JSON array of allowed paths'
+    required: true
+  acceptance-command:
+    description: 'Command to run acceptance tests'
+    required: true
+  build-command:
+    description: 'Command to run build'
+    required: true
+  workspace-root:
+    description: 'Workspace root'
+    required: true
+outputs:
+  digest:
+    description: 'Patch digest'
+    value: ${{ steps.verify.outputs.digest }}
+runs:
+  using: 'composite'
+  steps:
+    - name: Checkout target repo at base SHA
+      uses: actions/checkout@v4
+      with:
+        repository: ${{ inputs.target-repo }}
+        ref: ${{ inputs.base-sha }}
+        persist-credentials: false
+        path: target
+    - name: Checkout controller repo
+      uses: actions/checkout@v4
+      with:
+        repository: davidsegade/ia-dev-architecture-lab
+        ref: main
+        path: ia-dev
+        persist-credentials: false
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: '24'
+    - name: Download execution artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: execution
+        path: target/bundle
+    - name: Verify
+      id: verify
+      run: |
+        node ia-dev/controller/gate.mjs "${{ inputs.task }}" target/bundle/change.patch > target/bundle/acceptance-result.json
+        node -e 'const fs=require("fs"); const r=JSON.parse(fs.readFileSync("target/bundle/acceptance-result.json")); fs.appendFileSync(process.env.GITHUB_OUTPUT,`digest=${r.digest}\n`);'
+      shell: bash
+      env:
+        TASK: ${{ inputs.task }}
+        ALLOWED_PATHS: ${{ inputs.allowed-paths }}
+        ACCEPTANCE_COMMAND: ${{ inputs.acceptance-command }}
+        BUILD_COMMAND: ${{ inputs.build-command }}
+        WORKSPACE_ROOT: ${{ inputs.workspace-root }}
+        GITHUB_REPOSITORY: ${{ inputs.target-repo }}
+    - name: Upload acceptance artifact
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: acceptance
+        path: target/bundle/acceptance-result.json
+        retention-days: 7
