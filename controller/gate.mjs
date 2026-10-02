@@ -48,7 +48,7 @@ export function verify(root, task, candidate, allowedPaths = getAllowedPaths(), 
 
 if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.dirname, 'gate.mjs')) {
   const [task, patchFile] = process.argv.slice(2);
-  const allowedPaths = JSON.parse(process.env.ALLOWED_PATHS || '["src/main.mjs","tests/main.test.mjs"]');
+  const allowedPaths = getAllowedPaths();
   const digest = inspectPatch(readFileSync(patchFile, 'utf8'), allowedPaths);
   command('git', ['apply', '--check', patchFile], process.cwd());
   command('git', ['apply', patchFile], process.cwd());
