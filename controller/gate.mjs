@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { lstatSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { filesUnder } from './sync.mjs';
 
 export function command(cmd, args, cwd, timeout = 15000) {
   const result = spawnSync(cmd, args, { cwd, timeout, encoding: 'utf8', maxBuffer: 1024 * 1024 });
@@ -39,18 +40,46 @@ export function inspectPatch(patch, allowedPaths = getAllowedPaths()) {
   return createHash('sha256').update(patch).digest('hex');
 }
 
+/**
+ * The engine's own synthetic tasks ship with an objective checker that goes beyond the
+ * repository test suite. Every other repository brings its own acceptance command in
+ * the engine policy file, so its commands are what decides.
+ */
+const ENGINE_SELF_TASKS = ['clamp', 'chunk', 'sumCents'];
+
+/**
+ * Independent acceptance of a change.
+ *
+ * `candidate` is the filtered sandbox the agent edited, so it holds only the allowlisted
+ * paths and cannot stand in for a build. The commands declared in the policy therefore
+ * run in `root`, the full target checkout, after the change has been copied back. That
+ * is what makes the acceptance independent of the agent: it is the repository's own
+ * build and test entry points, run by the engine and not by the author.
+ */
 export function verify(root, task, candidate, allowedPaths = getAllowedPaths(), acceptanceCommand = 'npm test', buildCommand = 'npm run build') {
-  for (const file of allowedPaths) {
-    const fullPath = resolve(candidate, file);
-    if (!lstatSync(fullPath).isFile() || lstatSync(fullPath).isSymbolicLink()) {
-      throw new Error(`Regular file required: ${file}`);
+  for (const name of filesUnder(candidate, allowedPaths)) {
+    const fullPath = resolve(candidate, name);
+    let stat;
+    try {
+      stat = lstatSync(fullPath);
+    } catch {
+      throw new Error(`Regular file required: ${name} (missing)`);
+    }
+    if (!stat.isFile() || stat.isSymbolicLink()) {
+      throw new Error(`Regular file required: ${name}`);
     }
   }
-  command(process.execPath, ['--check', resolve(candidate, 'src/main.mjs')], root);
-  command(process.execPath, ['--test', resolve(candidate, 'tests/main.test.mjs')], root);
-  
-  const acceptance = command(process.execPath, [resolve(root, 'acceptance/check.mjs'), task, candidate], root, 5000);
-  return JSON.parse(acceptance.trim());
+
+  if (ENGINE_SELF_TASKS.includes(task)) {
+    command(process.execPath, ['--check', resolve(candidate, 'src/main.mjs')], root);
+    command(process.execPath, ['--test', resolve(candidate, 'tests/main.test.mjs')], root);
+    const acceptance = command(process.execPath, [resolve(root, 'acceptance/check.mjs'), task, candidate], root, 5000);
+    return JSON.parse(acceptance.trim());
+  }
+
+  const build = command('sh', ['-c', buildCommand], root, 900000).trim();
+  const acceptance = command('sh', ['-c', acceptanceCommand], root, 900000).trim();
+  return { task, build, acceptance, passed: true };
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.dirname, 'gate.mjs')) {

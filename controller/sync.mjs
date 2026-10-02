@@ -1,4 +1,4 @@
-import { cpSync, existsSync, lstatSync, mkdirSync } from 'node:fs';
+import { cpSync, existsSync, lstatSync, mkdirSync, readdirSync } from 'node:fs';
 import { resolve, sep } from 'node:path';
 
 /**
@@ -48,6 +48,35 @@ export function changedPaths(baseline, after) {
 /** True when every changed path is covered by the allowlist globs. */
 export function withinAllowedPaths(names, allowedPaths) {
   return names.every(name => allowedPaths.some(pattern => matchesPath(name, pattern)));
+}
+
+/**
+ * Lists the sandbox files as slash separated paths relative to `base`.
+ * Symbolic links are listed rather than followed or rejected here, so callers can
+ * decide whether a link is a violation.
+ */
+export function listFiles(base, prefix = '') {
+  const names = [];
+  for (const entry of readdirSync(base, { withFileTypes: true })) {
+    const name = `${prefix}${entry.name}`;
+    if (entry.isDirectory()) names.push(...listFiles(resolve(base, entry.name), `${name}/`));
+    else names.push(name);
+  }
+  return names;
+}
+
+/**
+ * The concrete files a set of policy globs covers inside `base`.
+ * A pattern without any wildcard must match a real file, so a policy naming a single
+ * file cannot silently match nothing.
+ */
+export function filesUnder(base, patterns) {
+  const names = listFiles(base);
+  const covered = names.filter(name => patterns.some(pattern => matchesPath(name, pattern)));
+  const required = patterns
+    .filter(pattern => !pattern.includes('*'))
+    .filter(pattern => !covered.includes(pattern));
+  return [...new Set([...covered, ...required])];
 }
 
 /** Matches a sandbox path against a policy glob, where `*` and `**` match within a name. */
