@@ -15,17 +15,35 @@ on:
         required: false
         default: 'false'
         type: string
+  workflow_call:
+    inputs:
+      target-repo:
+        description: 'Target repository (owner/name)'
+        required: true
+        type: string
+      issue-number:
+        description: 'Issue number to process'
+        required: true
+        type: string
+      automatic:
+        description: 'Automatic retry marker'
+        required: false
+        default: 'false'
+        type: string
+    secrets:
+      target-token:
+        description: 'Token for target repo (GITHUB_TOKEN from caller)'
+        required: true
 
 permissions:
   contents: read
 
 concurrency:
-  group: ia-dev-${{ github.event.inputs.target-repo }}-${{ github.event.inputs.issue-number }}
+  group: ia-dev-${{ inputs.target-repo || github.event.inputs.target-repo }}-${{ inputs.issue-number || github.event.inputs.issue-number }}
   cancel-in-progress: false
 
 jobs:
   prepare:
-    if: github.event.inputs.automatic == 'false' || github.event.inputs.automatic == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 3
     outputs:
@@ -42,18 +60,18 @@ jobs:
           {
             "event": "workflow_dispatch",
             "inputs": {
-              "issue": "${{ github.event.inputs.issue-number }}",
-              "automatic": "${{ github.event.inputs.automatic }}"
+              "issue": "${{ inputs.issue-number || github.event.inputs.issue-number }}",
+              "automatic": "${{ inputs.automatic || github.event.inputs.automatic }}"
             }
           }
           EOF
       - name: IA DEV Prepare
         uses: ./actions/ia-dev-prepare
         with:
-          target-repo: ${{ github.event.inputs.target-repo }}
-          target-token: ${{ github.token }}
-          issue-number: ${{ github.event.inputs.issue-number }}
-          automatic: ${{ github.event.inputs.automatic }}
+          target-repo: ${{ inputs.target-repo || github.event.inputs.target-repo }}
+          target-token: ${{ secrets.target-token || github.token }}
+          issue-number: ${{ inputs.issue-number || github.event.inputs.issue-number }}
+          automatic: ${{ inputs.automatic || github.event.inputs.automatic }}
         id: prepare
 
   execute:
@@ -66,8 +84,8 @@ jobs:
         uses: ./actions/ia-dev-execute
         with:
           task: ${{ needs.prepare.outputs.task }}
-          target-repo: ${{ github.event.inputs.target-repo }}
-          target-token: ${{ github.token }}
+          target-repo: ${{ inputs.target-repo || github.event.inputs.target-repo }}
+          target-token: ${{ secrets.target-token || github.token }}
           feedback-base64: ${{ needs.prepare.outputs.feedback }}
           allowed-paths: ${{ fromJson(needs.prepare.outputs.target-config).allowed_paths }}
           acceptance-command: ${{ fromJson(needs.prepare.outputs.target-config).acceptance_command }}
@@ -86,8 +104,8 @@ jobs:
         uses: ./actions/ia-dev-verify
         with:
           task: ${{ needs.prepare.outputs.task }}
-          target-repo: ${{ github.event.inputs.target-repo }}
-          target-token: ${{ github.token }}
+          target-repo: ${{ inputs.target-repo || github.event.inputs.target-repo }}
+          target-token: ${{ secrets.target-token || github.token }}
           base-sha: ${{ needs.prepare.outputs.base }}
           allowed-paths: ${{ fromJson(needs.prepare.outputs.target-config).allowed_paths }}
           acceptance-command: ${{ fromJson(needs.prepare.outputs.target-config).acceptance_command }}
@@ -105,8 +123,8 @@ jobs:
         uses: ./actions/ia-dev-review
         with:
           task: ${{ needs.prepare.outputs.task }}
-          target-repo: ${{ github.event.inputs.target-repo }}
-          target-token: ${{ github.token }}
+          target-repo: ${{ inputs.target-repo || github.event.inputs.target-repo }}
+          target-token: ${{ secrets.target-token || github.token }}
           base-sha: ${{ needs.prepare.outputs.base }}
           allowed-paths: ${{ fromJson(needs.prepare.outputs.target-config).allowed_paths }}
           acceptance-command: ${{ fromJson(needs.prepare.outputs.target-config).acceptance_command }}
@@ -130,8 +148,8 @@ jobs:
       - name: IA DEV Publish
         uses: ./actions/ia-dev-publish
         with:
-          target-repo: ${{ github.event.inputs.target-repo }}
-          target-token: ${{ github.token }}
+          target-repo: ${{ inputs.target-repo || github.event.inputs.target-repo }}
+          target-token: ${{ secrets.target-token || github.token }}
           base-sha: ${{ needs.prepare.outputs.base }}
           expected-digest: ${{ needs.verify.outputs.digest }}
           allowed-paths: ${{ fromJson(needs.prepare.outputs.target-config).allowed_paths }}
@@ -151,10 +169,10 @@ jobs:
       - name: IA DEV Failure
         uses: ./actions/ia-dev-failure
         with:
-          target-repo: ${{ github.event.inputs.target-repo }}
-          target-token: ${{ github.token }}
+          target-repo: ${{ inputs.target-repo || github.event.inputs.target-repo }}
+          target-token: ${{ secrets.target-token || github.token }}
           base-sha: ${{ needs.prepare.outputs.base }}
-          issue-number: ${{ github.event.inputs.issue-number }}
+          issue-number: ${{ inputs.issue-number || github.event.inputs.issue-number }}
           skip: ${{ needs.prepare.outputs.skip }}
           prepare-result: ${{ needs.prepare.result }}
           publish-result: ${{ needs.publish.result }}
