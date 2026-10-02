@@ -60,7 +60,7 @@ runs:
         name: execution
         path: target/bundle
     - name: Gate check
-      run: node ia-dev/controller/gate.mjs "${{ inputs.task }}" target/bundle/change.patch
+      run: node ia-dev/controller/gate.mjs "$TASK" target/bundle/change.patch
       shell: bash
       env:
         TASK: ${{ inputs.task }}
@@ -72,10 +72,10 @@ runs:
         GITHUB_REPOSITORY: ${{ inputs.target-repo }}
     - name: Install OpenCode
       run: npm install --prefix "$RUNNER_TEMP/opencode" --no-audit --no-fund opencode-ai@1.18.34
-      working-directory: target
       shell: bash
+      working-directory: target
     - name: Review agent
-      run: node ia-dev/controller/agent.mjs review "${{ inputs.task }}"
+      run: node ia-dev/controller/agent.mjs review "$TASK"
       shell: bash
       env:
         TASK: ${{ inputs.task }}

@@ -49,6 +49,7 @@ runs:
         node-version: '24'
     - name: Run architecture tests
       run: npm run test:architecture
+      shell: bash
       working-directory: ia-dev
     - name: Prepare
       id: prepare

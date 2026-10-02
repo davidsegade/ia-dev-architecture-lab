@@ -66,7 +66,7 @@ runs:
     - name: Verify
       id: verify
       run: |
-        node ia-dev/controller/gate.mjs "${{ inputs.task }}" target/bundle/change.patch > target/bundle/acceptance-result.json
+        node ia-dev/controller/gate.mjs "$TASK" target/bundle/change.patch > target/bundle/acceptance-result.json
         node -e 'const fs=require("fs"); const r=JSON.parse(fs.readFileSync("target/bundle/acceptance-result.json")); fs.appendFileSync(process.env.GITHUB_OUTPUT,`digest=${r.digest}\n`);'
       shell: bash
       env:
