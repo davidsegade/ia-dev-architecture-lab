@@ -103,11 +103,8 @@ const branch = `ia-dev/issue-${issueNumber}`;
 const [mode] = process.argv.slice(2);
 
 if (mode === 'prepare') {
-  const task = taskFromIssue(issue.body || '');
-  
-  if (!repoConfig.tasks || !repoConfig.tasks[task]) {
-    throw new Error(`Task ${task} not authorized for ${targetRepo}`);
-  }
+  const allowedTasks = repoConfig.tasks?.map(t => Object.keys(t)[0]) || [];
+  const task = taskFromIssue(issue.body || '', allowedTasks);
   
   const proposals = await api(`pulls?head=${encodeURIComponent(targetRepo.split('/')[0] + ':' + branch)}&state=all`);
   const comments = await api(`issues/${issueNumber}/comments?per_page=100`);
