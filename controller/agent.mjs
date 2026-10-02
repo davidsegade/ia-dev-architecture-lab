@@ -3,7 +3,7 @@ import { reviewVerdict } from './review.mjs';
 import { cpSync, mkdirSync, readFileSync, readdirSync, lstatSync, writeFileSync, rmSync } from 'node:fs';
 import { resolve, join, relative } from 'node:path';
 import { tasks } from './tasks.mjs';
-import { command, inspectPatch, verify, allowed } from './gate.mjs';
+import { command, inspectPatch, verify } from './gate.mjs';
 
 const root = process.cwd();
 const [mode, task] = process.argv.slice(2);
