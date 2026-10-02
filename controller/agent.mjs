@@ -114,9 +114,8 @@ for (let attempt = 1; attempt <= (mode === 'write' ? 2 : 1); attempt++) {
     if (mode === 'write') {
       if (!changed.length) throw new Error('No actual change');
       
-      record.acceptance = verify(root, task, candidate, allowedPaths, acceptanceCommand, buildCommand);
-      
       record.copied = copyBack(candidate, root, workspaceRoot, changed);
+      record.acceptance = verify(root, task, candidate, allowedPaths, acceptanceCommand, buildCommand);
       
       const patch = command('git', ['diff', '--no-ext-diff', '--', ...allowedPaths], root);
       record.digest = inspectPatch(patch);
