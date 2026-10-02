@@ -9,9 +9,12 @@ export function command(cmd, args, cwd, timeout = 15000) {
   return result.stdout;
 }
 
-function getAllowedPaths() {
-  if (process.env.ALLOWED_PATHS) return JSON.parse(process.env.ALLOWED_PATHS);
-  return ['src/main.mjs', 'tests/main.test.mjs'];
+export function getAllowedPaths() {
+  const raw = process.env.ALLOWED_PATHS;
+  if (!raw) return ['src/main.mjs', 'tests/main.test.mjs'];
+  const trimmed = raw.trim();
+  if (trimmed.startsWith('[')) return JSON.parse(trimmed);
+  return trimmed.split(',').map(entry => entry.trim()).filter(Boolean);
 }
 
 export function inspectPatch(patch, allowedPaths = getAllowedPaths()) {
