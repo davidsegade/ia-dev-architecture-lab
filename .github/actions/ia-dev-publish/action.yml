@@ -1,0 +1,64 @@
+name: 'IA DEV Publish'
+description: 'Publish IA DEV execution as PR with statuses'
+inputs:
+  target-repo:
+    description: 'Target repository'
+    required: true
+  target-token:
+    description: 'Token for target repo (needs write permissions)'
+    required: true
+  base-sha:
+    description: 'Base SHA'
+    required: true
+  expected-digest:
+    description: 'Expected patch digest from verify'
+    required: true
+  allowed-paths:
+    description: 'JSON array of allowed paths'
+    required: true
+  task:
+    description: 'Task name'
+    required: true
+runs:
+  using: 'composite'
+  steps:
+    - name: Checkout target repo at base SHA
+      uses: actions/checkout@v4
+      with:
+        repository: ${{ inputs.target-repo }}
+        ref: ${{ inputs.base-sha }}
+        persist-credentials: true
+        path: target
+    - name: Checkout controller repo
+      uses: actions/checkout@v4
+      with:
+        repository: davidsegade/ia-dev-architecture-lab
+        ref: main
+        path: ia-dev
+        persist-credentials: false
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: '24'
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
+      with:
+        pattern: '*'
+        merge-multiple: true
+        path: target/bundle
+    - name: Publish
+      run: node ia-dev/controller/github.mjs publish
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.target-token }}
+        GITHUB_REPOSITORY: ${{ inputs.target-repo }}
+        EXPECTED_DIGEST: ${{ inputs.expected-digest }}
+        BASE_SHA: ${{ inputs.base-sha }}
+        ALLOWED_PATHS: ${{ inputs.allowed-paths }}
+        TASK: ${{ inputs.task }}
+    - name: Upload publication artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: publication
+        path: target/bundle/publication.json
+        retention-days: 7

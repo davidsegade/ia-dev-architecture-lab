@@ -1,0 +1,84 @@
+name: 'IA DEV Review'
+description: 'Independent review of IA DEV execution'
+inputs:
+  task:
+    description: 'Task name'
+    required: true
+  target-repo:
+    description: 'Target repository'
+    required: true
+  target-token:
+    description: 'Token for target repo'
+    required: true
+  base-sha:
+    description: 'Base SHA'
+    required: true
+  allowed-paths:
+    description: 'JSON array of allowed paths'
+    required: true
+  acceptance-command:
+    description: 'Command to run acceptance tests'
+    required: true
+  build-command:
+    description: 'Command to run build'
+    required: true
+  workspace-root:
+    description: 'Workspace root'
+    required: true
+runs:
+  using: 'composite'
+  steps:
+    - name: Checkout target repo at base SHA
+      uses: actions/checkout@v4
+      with:
+        repository: ${{ inputs.target-repo }}
+        ref: ${{ inputs.base-sha }}
+        persist-credentials: false
+        path: target
+    - name: Checkout controller repo
+      uses: actions/checkout@v4
+      with:
+        repository: davidsegade/ia-dev-architecture-lab
+        ref: main
+        path: ia-dev
+        persist-credentials: false
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: '24'
+    - name: Download execution artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: execution
+        path: target/bundle
+    - name: Gate check
+      run: node ia-dev/controller/gate.mjs "${{ inputs.task }}" target/bundle/change.patch
+      shell: bash
+      env:
+        TASK: ${{ inputs.task }}
+        ALLOWED_PATHS: ${{ inputs.allowed-paths }}
+        ACCEPTANCE_COMMAND: ${{ inputs.acceptance-command }}
+        BUILD_COMMAND: ${{ inputs.build-command }}
+        WORKSPACE_ROOT: ${{ inputs.workspace-root }}
+        GITHUB_REPOSITORY: ${{ inputs.target-repo }}
+    - name: Install OpenCode
+      run: npm install --prefix "$RUNNER_TEMP/opencode" --no-audit --no-fund opencode-ai@1.18.34
+      working-directory: target
+    - name: Review agent
+      run: node ia-dev/controller/agent.mjs review "${{ inputs.task }}"
+      shell: bash
+      env:
+        TASK: ${{ inputs.task }}
+        OPENCODE_BIN: ${{ runner.temp }}/opencode/node_modules/.bin/opencode
+        ALLOWED_PATHS: ${{ inputs.allowed-paths }}
+        ACCEPTANCE_COMMAND: ${{ inputs.acceptance-command }}
+        BUILD_COMMAND: ${{ inputs.build-command }}
+        WORKSPACE_ROOT: ${{ inputs.workspace-root }}
+        GITHUB_REPOSITORY: ${{ inputs.target-repo }}
+    - name: Upload review artifact
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: review
+        path: target/bundle/review*
+        retention-days: 7

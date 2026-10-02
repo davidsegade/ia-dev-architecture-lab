@@ -1,0 +1,69 @@
+name: 'IA DEV Prepare'
+description: 'Prepare IA DEV execution: validate repo, load config, extract task, check duplicates'
+inputs:
+  target-repo:
+    description: 'Target repository (owner/name)'
+    required: true
+  target-token:
+    description: 'Token for target repo (GITHUB_TOKEN from caller)'
+    required: true
+  issue-number:
+    description: 'Issue number to process'
+    required: true
+  automatic:
+    description: 'Automatic retry marker'
+    required: false
+    default: 'false'
+outputs:
+  task:
+    description: 'Task name to execute'
+    value: ${{ steps.prepare.outputs.task }}
+  issue:
+    description: 'Issue number'
+    value: ${{ steps.prepare.outputs.issue }}
+  base:
+    description: 'Base SHA'
+    value: ${{ steps.prepare.outputs.base }}
+  skip:
+    description: 'Whether to skip execution'
+    value: ${{ steps.prepare.outputs.skip }}
+  feedback:
+    description: 'Previous feedback for retry'
+    value: ${{ steps.prepare.outputs.feedback }}
+  target-config:
+    description: 'JSON config for target repo'
+    value: ${{ steps.prepare.outputs.target-config }}
+runs:
+  using: 'composite'
+  steps:
+    - name: Checkout controller repo (ia-dev-architecture-lab)
+      uses: actions/checkout@v4
+      with:
+        repository: davidsegade/ia-dev-architecture-lab
+        ref: main
+        path: ia-dev
+        persist-credentials: false
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: '24'
+    - name: Run architecture tests
+      run: npm run test:architecture
+      working-directory: ia-dev
+    - name: Prepare
+      id: prepare
+      run: |
+        node ia-dev/controller/github.mjs prepare
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.target-token }}
+        GITHUB_REPOSITORY: ${{ inputs.target-repo }}
+        GITHUB_EVENT_PATH: ${{ runner.temp }}/event.json
+    - name: Set outputs
+      run: |
+        echo "task=${{ steps.prepare.outputs.task }}" >> $GITHUB_OUTPUT
+        echo "issue=${{ steps.prepare.outputs.issue }}" >> $GITHUB_OUTPUT
+        echo "base=${{ steps.prepare.outputs.base }}" >> $GITHUB_OUTPUT
+        echo "skip=${{ steps.prepare.outputs.skip }}" >> $GITHUB_OUTPUT
+        echo "feedback=${{ steps.prepare.outputs.feedback }}" >> $GITHUB_OUTPUT
+        echo "target-config=${{ steps.prepare.outputs.target-config }}" >> $GITHUB_OUTPUT
