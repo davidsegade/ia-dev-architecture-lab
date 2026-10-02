@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync, appendFileSync } from 'node:fs';
 import { command, inspectPatch, getAllowedPaths } from './gate.mjs';
 import { taskFromIssue } from './tasks.mjs';
+import { loadConfig } from './config.mjs';
 import { decision, shouldRetry } from './lifecycle.mjs';
 
 const targetRepo = process.env.TARGET_REPO || process.env.GITHUB_REPOSITORY;
@@ -26,52 +27,6 @@ async function api(path, method = 'GET', body) {
   return response.status === 204 ? null : await response.json();
 }
 
-function loadConfig() {
-  const configPath = process.env.CONFIG_PATH || 'config/repositories.yml';
-  const yaml = readFileSync(configPath, 'utf8');
-  const repos = {};
-  let currentRepo = null;
-  let currentArrayKey = null;
-  
-  for (const line of yaml.split('\n')) {
-    // Handle array items (lines starting with - )
-    const arrayItemMatch = line.match(/^(\s*)-\s*(.*)$/);
-    if (arrayItemMatch) {
-      const [, spaces, item] = arrayItemMatch;
-      const level = spaces.length / 2;
-      if (level === 3 && currentRepo && currentArrayKey) {
-        const item = arrayItemMatch[2].trim().replace(/^["']|["']$/g, '');
-        const kvMatch = item.match(/^([\w-]+):\s*(.*)$/);
-        if (kvMatch) {
-          repos[currentRepo][currentArrayKey].push({ [kvMatch[1]]: kvMatch[2].replace(/^["']|["']$/g, '') });
-        } else {
-          repos[currentRepo][currentArrayKey].push(item);
-        }
-      }
-      continue;
-    }
-    
-    const match = line.match(/^(\s*)([\w\/.-]+):\s*(.*)$/);
-    if (!match) continue;
-    const [, spaces, key, value] = match;
-    const level = spaces.length / 2;
-    
-    if (level === 1) {
-      currentRepo = key;
-      repos[currentRepo] = {};
-      currentArrayKey = null;
-    } else if (level === 2 && currentRepo) {
-      if (value === '') {
-        repos[currentRepo][key] = [];
-        currentArrayKey = key;
-      } else {
-        repos[currentRepo][key] = value.replace(/^["']|["']$/g, '');
-        currentArrayKey = null;
-      }
-    }
-  }
-  return repos;
-}
 
 const config = loadConfig();
 const repoConfig = config[targetRepo];
