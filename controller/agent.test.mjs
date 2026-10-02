@@ -27,6 +27,31 @@ test('the result artifact exposes the reviewer verdict at the top level', () => 
   assert.match(source, /let verdict = null;/);
 });
 
+test('the agent runs only on free models, with no paid fallback', () => {
+  // Cost is zero by construction rather than by policy: the only models named in the
+  // agent are the free ones, and freeUsage rejects any run whose telemetry does not
+  // report zero cost. If the free models stop working the run fails instead of
+  // quietly falling back to a billed provider.
+  const models = [...agentSource().matchAll(/'(opencode\/[\w.-]+)'/g)].map(match => match[1]);
+  assert.ok(models.length > 0, 'no model is named in the agent');
+  for (const model of models) {
+    assert.match(
+      model,
+      /^opencode\/(big-pickle|space-bunny-free)$/,
+      `${model} is not one of the free models`
+    );
+  }
+  assert.equal(/anthropic|claude|gpt|gemini|openai/g.test(agentSource()), false);
+});
+
+test('the author and the reviewer run on different models', () => {
+  // An independent review only means something if a different model produced the change.
+  const source = agentSource();
+  const models = [...source.matchAll(/mode === 'write' \? '([^']+)' : '([^']+)'/g)];
+  assert.equal(models.length, 1, 'expected a single author/reviewer model selection');
+  assert.notEqual(models[0][1], models[0][2]);
+});
+
 test('the retry loop variables are reassignable', () => {
   // The retry loop reassigns success and feedback; const declarations throw at runtime
   // only after a failed attempt, which is unreachable from a green test run.

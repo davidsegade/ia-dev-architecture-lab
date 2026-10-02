@@ -37,29 +37,29 @@ runs:
   using: 'composite'
   steps:
     - name: Checkout target repo at base SHA
-      uses: actions/checkout@v4
+      uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # actions/checkout@v4.4.0
       with:
         repository: ${{ inputs.target-repo }}
         ref: ${{ inputs.base-sha }}
         persist-credentials: false
         path: target
     - name: Checkout controller repo
-      uses: actions/checkout@v4
+      uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # actions/checkout@v4.4.0
       with:
         repository: davidsegade/ia-dev-architecture-lab
         ref: main
         path: ia-dev
         persist-credentials: false
     - name: Setup Node
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # actions/setup-node@v4.4.0
       with:
         node-version: '24'
     - name: Setup Flutter
-      uses: subosito/flutter-action@v2
+      uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # subosito/flutter-action@v2
       with:
         channel: stable
     - name: Download execution artifact
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # actions/download-artifact@v4
       with:
         name: execution
         path: target/bundle
@@ -81,7 +81,7 @@ runs:
         GITHUB_REPOSITORY: ${{ inputs.target-repo }}
     - name: Upload acceptance artifact
       if: always()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # actions/upload-artifact@v4
       with:
         name: acceptance
         path: target/bundle/acceptance-result.json

@@ -17,7 +17,8 @@ function read(file) {
 
 /** Every `uses:` reference in the file, as raw strings. */
 function usesReferences(source) {
-  return [...source.matchAll(/uses:\s*(\S+)/g)].map(match => match[1]);
+  // Stop before the trailing "# tag" comment a pinned reference carries.
+  return [...source.matchAll(/(?<![\w-])uses:[ \t]*([^\s#]+)/g)].map(match => match[1]);
 }
 
 test('no workflow references an action or workflow by a mutable ref', () => {
@@ -31,6 +32,19 @@ test('no workflow references an action or workflow by a mutable ref', () => {
           `${file} references ${reference} by a mutable ref; pin an exact SHA`
         );
       }
+    }
+  }
+});
+
+test('every workflow action is pinned to an exact commit', () => {
+  for (const file of workflowFiles()) {
+    for (const reference of usesReferences(read(file))) {
+      if (reference.startsWith('./')) continue;
+      assert.match(
+        reference,
+        /@[0-9a-f]{40}$/,
+        `${file} uses ${reference}, which is not pinned to a full commit SHA`
+      );
     }
   }
 });
