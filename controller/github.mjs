@@ -30,10 +30,27 @@ function loadConfig() {
   const yaml = readFileSync(configPath, 'utf8');
   const repos = {};
   let currentRepo = null;
-  let currentKey = null;
+  let currentArrayKey = null;
   
   for (const line of yaml.split('\n')) {
-    const match = line.match(/^(\s*)(\w[\w-]*):\s*(.*)$/);
+    // Handle array items (lines starting with - )
+    const arrayItemMatch = line.match(/^(\s*)-\s*(.*)$/);
+    if (arrayItemMatch) {
+      const [, spaces, item] = arrayItemMatch;
+      const level = spaces.length / 2;
+      if (level === 3 && currentRepo && currentArrayKey) {
+        const item = arrayItemMatch[2].trim().replace(/^["']|["']$/g, '');
+        const kvMatch = item.match(/^([\w-]+):\s*(.*)$/);
+        if (kvMatch) {
+          repos[currentRepo][currentArrayKey].push({ [kvMatch[1]]: kvMatch[2].replace(/^["']|["']$/g, '') });
+        } else {
+          repos[currentRepo][currentArrayKey].push(item);
+        }
+      }
+      continue;
+    }
+    
+    const match = line.match(/^(\s*)([\w\/.-]+):\s*(.*)$/);
     if (!match) continue;
     const [, spaces, key, value] = match;
     const level = spaces.length / 2;
@@ -41,23 +58,14 @@ function loadConfig() {
     if (level === 1) {
       currentRepo = key;
       repos[currentRepo] = {};
+      currentArrayKey = null;
     } else if (level === 2 && currentRepo) {
       if (value === '') {
         repos[currentRepo][key] = [];
+        currentArrayKey = key;
       } else {
         repos[currentRepo][key] = value.replace(/^["']|["']$/g, '');
-      }
-    } else if (level === 3 && currentRepo) {
-      const item = line.trim().replace(/^-\s*/, '').replace(/^["']|["']$/g, '');
-      const arrKey = Object.keys(repos[currentRepo]).find(k => Array.isArray(repos[currentRepo][k]));
-      if (arrKey && Array.isArray(repos[currentRepo][arrKey])) {
-        // Check if item contains a key-value pair (task: "description")
-        const kvMatch = item.match(/^(\w+):\s*(.*)$/);
-        if (kvMatch) {
-          repos[currentRepo][arrKey].push({ [kvMatch[1]]: kvMatch[2].replace(/^["']|["']$/g, '') });
-        } else {
-          repos[currentRepo][arrKey].push(item);
-        }
+        currentArrayKey = null;
       }
     }
   }
