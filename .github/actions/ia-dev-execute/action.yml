@@ -61,8 +61,8 @@ runs:
         channel: stable
     - name: Install OpenCode
       run: npm install --prefix "$RUNNER_TEMP/opencode" --no-audit --no-fund opencode-ai@1.18.34
-      working-directory: target
       shell: bash
+      working-directory: target
     - name: Execute agent
       id: execute
       run: |
