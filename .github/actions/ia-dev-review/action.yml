@@ -1,5 +1,9 @@
 name: 'IA DEV Review'
 description: 'Independent review of IA DEV execution'
+outputs:
+  approved:
+    description: 'Whether the independent reviewer approved the change'
+    value: ${{ steps.verdict.outputs.approved }}
 inputs:
   task:
     description: 'Task name'
@@ -79,6 +83,7 @@ runs:
     - name: Review agent
       run: node "$IA_DEV_ENGINE"/controller/agent.mjs review "$TASK"
       shell: bash
+      id: verdict
       working-directory: target
       env:
         IA_DEV_ENGINE: ${{ github.workspace }}/ia-dev
@@ -90,6 +95,11 @@ runs:
         BUILD_COMMAND: ${{ inputs.build-command }}
         WORKSPACE_ROOT: ${{ inputs.workspace-root }}
         GITHUB_REPOSITORY: ${{ inputs.target-repo }}
+    - name: Expose reviewer verdict
+      shell: bash
+      working-directory: target
+      run: |
+        node -e 'const fs=require("fs");const r=JSON.parse(fs.readFileSync("bundle/review-result.json"));fs.appendFileSync(process.env.GITHUB_OUTPUT,`approved=${r.approved}\n`);'
     - name: Upload review artifact
       if: always()
       uses: actions/upload-artifact@v4
