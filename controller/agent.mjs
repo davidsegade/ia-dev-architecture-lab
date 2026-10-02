@@ -4,6 +4,7 @@ import { cpSync, mkdirSync, readFileSync, readdirSync, lstatSync, writeFileSync,
 import { resolve, join, relative } from 'node:path';
 import { taskCatalog } from './tasks.mjs';
 import { command, inspectPatch, verify, getAllowedPaths, getProtectedPaths } from './gate.mjs';
+import { permissionsFor } from './permissions.mjs';
 
 const root = process.cwd();
 const [mode, task] = process.argv.slice(2);
@@ -55,30 +56,12 @@ const baseline = inventory(candidate);
 
 const model = mode === 'write' ? 'opencode/big-pickle' : 'opencode/space-bunny-free';
 
-const editPermissions = {'*': 'deny'};
-for (const path of allowedPaths) {
-  editPermissions[`**/${path.replace(/\*/g, '**')}`] = 'allow';
-}
-
-const bashCommands = ['*', 'deny'];
-if (mode === 'write') {
-  bashCommands.push('npm test', 'npm run build', acceptanceCommand, buildCommand);
-}
-
 const config = join(work, 'opencode.json');
 writeFileSync(config, JSON.stringify({
   model,
   enabled_providers: ['opencode'],
   share: 'disabled',
-  permission: {
-    '*': 'deny',
-    read: 'allow',
-    glob: 'allow',
-    grep: 'allow',
-    external_directory: 'deny',
-    edit: mode === 'write' ? editPermissions : 'deny',
-    bash: mode === 'write' ? Object.fromEntries(bashCommands.map((v, i, a) => i % 2 === 0 ? [v, a[i+1]] : []).filter(Boolean)) : 'deny'
-  }
+  permission: permissionsFor(mode, { allowedPaths, acceptanceCommand, buildCommand })
 }));
 
 const childEnv = {
