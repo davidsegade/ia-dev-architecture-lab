@@ -9,12 +9,19 @@ export function command(cmd, args, cwd, timeout = 15000) {
   return result.stdout;
 }
 
-export function getAllowedPaths() {
-  const raw = process.env.ALLOWED_PATHS;
-  if (!raw) return ['src/main.mjs', 'tests/main.test.mjs'];
+export function parsePathList(raw, fallback) {
+  if (!raw) return fallback;
   const trimmed = raw.trim();
   if (trimmed.startsWith('[')) return JSON.parse(trimmed);
   return trimmed.split(',').map(entry => entry.trim()).filter(Boolean);
+}
+
+export function getAllowedPaths() {
+  return parsePathList(process.env.ALLOWED_PATHS, ['src/main.mjs', 'tests/main.test.mjs']);
+}
+
+export function getProtectedPaths() {
+  return parsePathList(process.env.PROTECTED_PATHS, ['config/repositories.yml', '.github/**', 'controller/**', 'package.json']);
 }
 
 export function inspectPatch(patch, allowedPaths = getAllowedPaths()) {

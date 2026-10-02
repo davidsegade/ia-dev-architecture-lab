@@ -3,13 +3,13 @@ import { reviewVerdict } from './review.mjs';
 import { cpSync, mkdirSync, readFileSync, readdirSync, lstatSync, writeFileSync, rmSync } from 'node:fs';
 import { resolve, join, relative } from 'node:path';
 import { tasks } from './tasks.mjs';
-import { command, inspectPatch, verify } from './gate.mjs';
+import { command, inspectPatch, verify, getAllowedPaths, getProtectedPaths } from './gate.mjs';
 
 const root = process.cwd();
 const [mode, task] = process.argv.slice(2);
 
-const allowedPaths = JSON.parse(process.env.ALLOWED_PATHS || '["src/main.mjs","tests/main.test.mjs"]');
-const protectedPaths = JSON.parse(process.env.PROTECTED_PATHS || '["config/repositories.yml",".github/**","controller/**","package.json"]');
+const allowedPaths = getAllowedPaths();
+const protectedPaths = getProtectedPaths();
 const acceptanceCommand = process.env.ACCEPTANCE_COMMAND || 'npm test';
 const buildCommand = process.env.BUILD_COMMAND || 'npm run build';
 const workspaceRoot = process.env.WORKSPACE_ROOT || '.';

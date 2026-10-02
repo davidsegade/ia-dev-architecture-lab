@@ -14,6 +14,10 @@ inputs:
     description: 'Previous feedback'
     required: false
     default: ''
+  protected-paths:
+    description: 'Comma-separated list of protected paths'
+    required: false
+    default: ''
   allowed-paths:
     description: 'JSON array of allowed paths'
     required: true
@@ -69,6 +73,7 @@ runs:
         OPENCODE_BIN: ${{ runner.temp }}/opencode/node_modules/.bin/opencode
         FEEDBACK_BASE64: ${{ inputs.feedback-base64 }}
         ALLOWED_PATHS: ${{ inputs.allowed-paths }}
+        PROTECTED_PATHS: ${{ inputs.protected-paths }}
         ACCEPTANCE_COMMAND: ${{ inputs.acceptance-command }}
         BUILD_COMMAND: ${{ inputs.build-command }}
         WORKSPACE_ROOT: ${{ inputs.workspace-root }}

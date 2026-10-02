@@ -13,6 +13,10 @@ inputs:
   base-sha:
     description: 'Base SHA'
     required: true
+  protected-paths:
+    description: 'Comma-separated list of protected paths'
+    required: false
+    default: ''
   allowed-paths:
     description: 'JSON array of allowed paths'
     required: true
@@ -68,6 +72,7 @@ runs:
       env:
         TASK: ${{ inputs.task }}
         ALLOWED_PATHS: ${{ inputs.allowed-paths }}
+        PROTECTED_PATHS: ${{ inputs.protected-paths }}
         ACCEPTANCE_COMMAND: ${{ inputs.acceptance-command }}
         BUILD_COMMAND: ${{ inputs.build-command }}
         WORKSPACE_ROOT: ${{ inputs.workspace-root }}
