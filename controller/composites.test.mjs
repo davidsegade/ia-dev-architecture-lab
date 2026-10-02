@@ -111,6 +111,21 @@ function publishesOutputs(keys) {
   return body.includes('GITHUB_OUTPUT') || /controller\/github\.mjs/.test(body);
 }
 
+test('every composite action is pinned to an exact commit', () => {
+  // A mutable tag can be repointed at new code by anyone who controls the tag, which
+  // would hand the executor and the reviewer a different binary than the one reviewed.
+  for (const file of compositeFiles()) {
+    for (const reference of [...readFileSync(file, 'utf8').matchAll(/(?<![\w-])uses:[ \t]*([^\s#]+)/g)].map(m => m[1])) {
+      if (reference.startsWith('./')) continue;
+      assert.match(
+        reference,
+        /@[0-9a-f]{40}$/,
+        `${file} uses ${reference}, which is not pinned to a full commit SHA`
+      );
+    }
+  }
+});
+
 test('every composite output resolves to a step that publishes it', () => {
   // The regression: the review composite declared `value: ${{ steps.verdict.outputs.approved }}`
   // while the id sat on the step running the agent, which publishes nothing. The output
