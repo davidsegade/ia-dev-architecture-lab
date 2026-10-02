@@ -39,7 +39,7 @@ permissions:
 
 jobs:
   prepare:
-    if: github.event.inputs.automatic == 'false' || github.event.inputs.automatic == 'true'
+    if: inputs.automatic == 'false' || inputs.automatic == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 3
     outputs:
