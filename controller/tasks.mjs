@@ -23,10 +23,25 @@ export function taskCatalog() {
   return { ...tasks, ...registered };
 }
 
+/**
+ * Reads the synthetic task from an issue body.
+ *
+ * The marker must be a line of its own: `task: <name>`. Anything else is rejected
+ * rather than guessed, because a task name selects the specification the agent and
+ * the reviewer are held to, and a misread marker would silently change the contract.
+ */
 export function taskFromIssue(body, allowedTasks = Object.keys(tasks)) {
   const match = /^task: (\S+)\s*$/m.exec(body);
-  if (!match) throw new Error('A registered synthetic task is required');
+  if (!match) {
+    const loose = /(^|\n)\s*task:\s*(\S+)/.exec(body);
+    const hint = loose
+      ? ` Found "task: ${loose[2]}" on a line with other text; the marker must be alone on its own line.`
+      : ` Expected a line containing only "task: <name>". Known tasks: ${allowedTasks.join(', ')}.`;
+    throw new Error(`A registered synthetic task is required.${hint}`);
+  }
   const task = match[1];
-  if (!allowedTasks.includes(task)) throw new Error(`Task ${task} not in allowlist`);
+  if (!allowedTasks.includes(task)) {
+    throw new Error(`Task ${task} not in allowlist. Known tasks: ${allowedTasks.join(', ')}`);
+  }
   return task;
 }
