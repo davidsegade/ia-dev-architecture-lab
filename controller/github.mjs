@@ -1,10 +1,11 @@
 import { readFileSync, writeFileSync, appendFileSync } from 'node:fs';
-import { command, inspectPatch } from './gate.mjs';
+import { command, inspectPatch, getAllowedPaths } from './gate.mjs';
 import { taskFromIssue } from './tasks.mjs';
 import { decision, shouldRetry } from './lifecycle.mjs';
 
 const targetRepo = process.env.TARGET_REPO || process.env.GITHUB_REPOSITORY;
 const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
+const runUrl = `https://github.com/${targetRepo}/actions/runs/${process.env.GITHUB_RUN_ID}`;
 
 if (!/^[\w.-]+\/[\w.-]+$/.test(targetRepo || '') || !token) {
   throw new Error('Target repo and token required');
@@ -164,13 +165,12 @@ if (mode === 'prepare') {
   command('git', ['config', 'user.email', '41898282+github-actions[bot]@users.noreply.github.com'], process.cwd());
   command('git', ['switch', '-c', branch], process.cwd());
   
-  const allowedPaths = JSON.parse(process.env.ALLOWED_PATHS || '[]');
+  const allowedPaths = getAllowedPaths();
   command('git', ['add', '--', ...allowedPaths], process.cwd());
   command('git', ['commit', '-m', `IA DEV: ${task} for issue #${issueNumber}`], process.cwd());
   command('git', ['push', 'origin', `HEAD:refs/heads/${branch}`], process.cwd(), 30000);
   
   const sha = command('git', ['rev-parse', 'HEAD'], process.cwd()).trim();
-  const runUrl = `https://github.com/${targetRepo}/actions/runs/${process.env.GITHUB_RUN_ID}`;
   
   for (const context of ['IA DEV / acceptance', 'IA DEV / review']) {
     await api(`statuses/${sha}`, 'POST', { state: 'success', context, target_url: runUrl, description: `Verified artifact ${digest.slice(0, 12)}` });
