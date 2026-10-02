@@ -30,10 +30,6 @@ inputs:
   workspace-root:
     description: 'Workspace root'
     required: true
-outputs:
-  digest:
-    description: 'Patch digest'
-    value: ${{ steps.execute.outputs.digest }}
 runs:
   using: 'composite'
   steps:

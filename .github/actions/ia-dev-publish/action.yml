@@ -19,6 +19,13 @@ inputs:
   task:
     description: 'Task name'
     required: true
+outputs:
+  pr-url:
+    description: 'URL of the pull request opened for the verified change'
+    value: ${{ steps.publish.outputs.pr-url }}
+  pr-sha:
+    description: 'Commit SHA published on the pull request branch'
+    value: ${{ steps.publish.outputs.pr-sha }}
 runs:
   using: 'composite'
   steps:
@@ -47,6 +54,7 @@ runs:
         merge-multiple: true
         path: target/bundle
     - name: Publish
+      id: publish
       run: node "$IA_DEV_ENGINE"/controller/github.mjs publish
       shell: bash
       working-directory: target

@@ -83,7 +83,6 @@ runs:
     - name: Review agent
       run: node "$IA_DEV_ENGINE"/controller/agent.mjs review "$TASK"
       shell: bash
-      id: verdict
       working-directory: target
       env:
         IA_DEV_ENGINE: ${{ github.workspace }}/ia-dev
@@ -97,6 +96,7 @@ runs:
         GITHUB_REPOSITORY: ${{ inputs.target-repo }}
     - name: Expose reviewer verdict
       shell: bash
+      id: verdict
       working-directory: target
       run: |
         node -e 'const fs=require("fs");const r=JSON.parse(fs.readFileSync("bundle/review-result.json"));fs.appendFileSync(process.env.GITHUB_OUTPUT,`approved=${r.approved}\n`);'
