@@ -54,6 +54,20 @@ jobs:
       feedback: ${{ steps.prepare.outputs.feedback }}
       target-config: ${{ steps.prepare.outputs.target-config }}
     steps:
+      - name: Checkout ia-dev-architecture-lab (for composite actions)
+        uses: actions/checkout@v4
+        with:
+          repository: davidsegade/ia-dev-architecture-lab
+          ref: main
+          path: ia-dev
+          persist-credentials: false
+      - name: Checkout target repo at base (will be determined)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.target-repo }}
+          ref: main
+          path: target
+          persist-credentials: false
       - name: Prepare event payload
         run: |
           cat > $RUNNER_TEMP/event.json <<'EOF'
@@ -66,7 +80,7 @@ jobs:
           }
           EOF
       - name: IA DEV Prepare
-        uses: davidsegade/ia-dev-architecture-lab/.github/actions/ia-dev-prepare@main
+        uses: ./ia-dev/.github/actions/ia-dev-prepare
         with:
           target-repo: ${{ inputs.target-repo }}
           target-token: ${{ secrets.target-token }}
@@ -80,8 +94,22 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
+      - name: Checkout ia-dev-architecture-lab
+        uses: actions/checkout@v4
+        with:
+          repository: davidsegade/ia-dev-architecture-lab
+          ref: main
+          path: ia-dev
+          persist-credentials: false
+      - name: Checkout target repo at base SHA
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.target-repo }}
+          ref: ${{ needs.prepare.outputs.base }}
+          path: target
+          persist-credentials: false
       - name: IA DEV Execute
-        uses: davidsegade/ia-dev-architecture-lab/.github/actions/ia-dev-execute@main
+        uses: ./ia-dev/.github/actions/ia-dev-execute
         with:
           task: ${{ needs.prepare.outputs.task }}
           target-repo: ${{ inputs.target-repo }}
@@ -100,8 +128,27 @@ jobs:
     outputs:
       digest: ${{ steps.verify.outputs.digest }}
     steps:
+      - name: Checkout ia-dev-architecture-lab
+        uses: actions/checkout@v4
+        with:
+          repository: davidsegade/ia-dev-architecture-lab
+          ref: main
+          path: ia-dev
+          persist-credentials: false
+      - name: Checkout target repo at base SHA
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.target-repo }}
+          ref: ${{ needs.prepare.outputs.base }}
+          path: target
+          persist-credentials: false
+      - name: Download execution artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: execution
+          path: target/bundle
       - name: IA DEV Verify
-        uses: davidsegade/ia-dev-architecture-lab/.github/actions/ia-dev-verify@main
+        uses: ./ia-dev/.github/actions/ia-dev-verify
         with:
           task: ${{ needs.prepare.outputs.task }}
           target-repo: ${{ inputs.target-repo }}
@@ -112,6 +159,13 @@ jobs:
           build-command: ${{ fromJson(needs.prepare.outputs.target-config).build_command }}
           workspace-root: ${{ fromJson(needs.prepare.outputs.target-config).workspace_root }}
         id: verify
+      - name: Upload acceptance artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: acceptance
+          path: target/bundle/acceptance-result.json
+          retention-days: 7
 
   review:
     needs: [prepare, execute, verify]
@@ -119,8 +173,27 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
+      - name: Checkout ia-dev-architecture-lab
+        uses: actions/checkout@v4
+        with:
+          repository: davidsegade/ia-dev-architecture-lab
+          ref: main
+          path: ia-dev
+          persist-credentials: false
+      - name: Checkout target repo at base SHA
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.target-repo }}
+          ref: ${{ needs.prepare.outputs.base }}
+          path: target
+          persist-credentials: false
+      - name: Download execution artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: execution
+          path: target/bundle
       - name: IA DEV Review
-        uses: davidsegade/ia-dev-architecture-lab/.github/actions/ia-dev-review@main
+        uses: ./ia-dev/.github/actions/ia-dev-review
         with:
           task: ${{ needs.prepare.outputs.task }}
           target-repo: ${{ inputs.target-repo }}
@@ -145,8 +218,28 @@ jobs:
       pr-url: ${{ steps.publish.outputs.pr-url }}
       pr-sha: ${{ steps.publish.outputs.pr-sha }}
     steps:
+      - name: Checkout ia-dev-architecture-lab
+        uses: actions/checkout@v4
+        with:
+          repository: davidsegade/ia-dev-architecture-lab
+          ref: main
+          path: ia-dev
+          persist-credentials: false
+      - name: Checkout target repo at base SHA (with write)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.target-repo }}
+          ref: ${{ needs.prepare.outputs.base }}
+          path: target
+          persist-credentials: true
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: '*'
+          merge-multiple: true
+          path: target/bundle
       - name: IA DEV Publish
-        uses: davidsegade/ia-dev-architecture-lab/.github/actions/ia-dev-publish@main
+        uses: ./ia-dev/.github/actions/ia-dev-publish
         with:
           target-repo: ${{ inputs.target-repo }}
           target-token: ${{ secrets.target-token }}
@@ -155,6 +248,12 @@ jobs:
           allowed-paths: ${{ fromJson(needs.prepare.outputs.target-config).allowed_paths }}
           task: ${{ needs.prepare.outputs.task }}
         id: publish
+      - name: Upload publication artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: publication
+          path: target/bundle/publication.json
+          retention-days: 7
 
   report-failure:
     needs: [prepare, execute, verify, review, publish]
@@ -166,8 +265,29 @@ jobs:
       issues: write
       actions: write
     steps:
+      - name: Checkout ia-dev-architecture-lab
+        uses: actions/checkout@v4
+        with:
+          repository: davidsegade/ia-dev-architecture-lab
+          ref: main
+          path: ia-dev
+          persist-credentials: false
+      - name: Checkout target repo at base SHA
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.target-repo }}
+          ref: ${{ needs.prepare.outputs.base }}
+          path: target
+          persist-credentials: false
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          pattern: '*'
+          merge-multiple: true
+          path: target/bundle
       - name: IA DEV Failure
-        uses: davidsegade/ia-dev-architecture-lab/.github/actions/ia-dev-failure@main
+        uses: ./ia-dev/.github/actions/ia-dev-failure
         with:
           target-repo: ${{ inputs.target-repo }}
           target-token: ${{ secrets.target-token }}
