@@ -85,8 +85,15 @@ export function verify(root, task, candidate, allowedPaths = getAllowedPaths(), 
 if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.dirname, 'gate.mjs')) {
   const [task, patchFile] = process.argv.slice(2);
   const allowedPaths = getAllowedPaths();
+  const root = process.cwd();
+  const workspaceRoot = process.env.WORKSPACE_ROOT || '.';
+  const acceptanceCommand = process.env.ACCEPTANCE_COMMAND || 'npm test';
+  const buildCommand = process.env.BUILD_COMMAND || 'npm run build';
   const digest = inspectPatch(readFileSync(patchFile, 'utf8'), allowedPaths);
-  command('git', ['apply', '--check', patchFile], process.cwd());
-  command('git', ['apply', patchFile], process.cwd());
-  console.log(JSON.stringify({ digest, ...verify(process.cwd(), task, process.cwd(), allowedPaths) }));
+  command('git', ['apply', '--check', patchFile], root);
+  command('git', ['apply', patchFile], root);
+  // The policy commands run in the target checkout, not the filtered sandbox, so the
+  // gate sees the same tree a human would after merging.
+  const verified = verify(resolve(root, workspaceRoot), task, root, allowedPaths, acceptanceCommand, buildCommand);
+  console.log(JSON.stringify({ digest, ...verified }));
 }
