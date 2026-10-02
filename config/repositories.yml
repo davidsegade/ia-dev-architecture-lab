@@ -10,7 +10,7 @@ repositories:
       - "analysis_options.yaml"
       - ".metadata"
     tasks:
-      add-dummy-test: "Add a simple dummy test to test/widget_test.dart that always passes. Do not modify any production code. Preserve existing tests."
+      - add-dummy-test: "Add a simple dummy test to test/widget_test.dart that always passes. Do not modify any production code. Preserve existing tests."
     acceptance_command: "flutter test"
     build_command: "flutter analyze && flutter test"
     workspace_root: "."
