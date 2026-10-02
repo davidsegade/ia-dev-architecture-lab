@@ -46,6 +46,10 @@ runs:
       uses: actions/setup-node@v4
       with:
         node-version: '24'
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        channel: stable
     - name: Download execution artifact
       uses: actions/download-artifact@v4
       with:
@@ -64,6 +68,7 @@ runs:
     - name: Install OpenCode
       run: npm install --prefix "$RUNNER_TEMP/opencode" --no-audit --no-fund opencode-ai@1.18.34
       working-directory: target
+      shell: bash
     - name: Review agent
       run: node ia-dev/controller/agent.mjs review "${{ inputs.task }}"
       shell: bash

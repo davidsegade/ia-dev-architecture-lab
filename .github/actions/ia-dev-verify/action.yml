@@ -50,6 +50,10 @@ runs:
       uses: actions/setup-node@v4
       with:
         node-version: '24'
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        channel: stable
     - name: Download execution artifact
       uses: actions/download-artifact@v4
       with:

@@ -37,7 +37,7 @@ runs:
       uses: actions/checkout@v4
       with:
         repository: ${{ inputs.target-repo }}
-        ref: ${{ github.event.inputs.base_sha }}
+        ref: ${{ inputs.base-sha }}
         persist-credentials: false
         path: target
     - name: Checkout controller repo
@@ -51,9 +51,14 @@ runs:
       uses: actions/setup-node@v4
       with:
         node-version: '24'
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        channel: stable
     - name: Install OpenCode
       run: npm install --prefix "$RUNNER_TEMP/opencode" --no-audit --no-fund opencode-ai@1.18.34
       working-directory: target
+      shell: bash
     - name: Execute agent
       id: execute
       run: |
