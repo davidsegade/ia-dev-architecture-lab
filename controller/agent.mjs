@@ -122,7 +122,7 @@ for (let attempt = 1; attempt <= (mode === 'write' ? 2 : 1); attempt++) {
       writeFileSync(join(bundle, 'change.patch'), patch);
     } else {
       if (changed.length) throw new Error('Reviewer modified candidate');
-      record.verdict = reviewVerdict(result.stdout);
+      record.verdict = reviewVerdict(result.stdout, changed);
     }
     
     success = true;
