@@ -60,7 +60,7 @@ runs:
         name: execution
         path: target/bundle
     - name: Gate check
-      run: node ia-dev/controller/gate.mjs "${{ inputs.task }}" target/bundle/change.patch
+      run: node ia-dev/controller/gate.mjs "$TASK" target/bundle/change.patch
       shell: bash
       env:
         TASK: ${{ inputs.task }}
@@ -75,7 +75,7 @@ runs:
       working-directory: target
       shell: bash
     - name: Review agent
-      run: node ia-dev/controller/agent.mjs review "${{ inputs.task }}"
+      run: node ia-dev/controller/agent.mjs review "$TASK"
       shell: bash
       env:
         TASK: ${{ inputs.task }}
