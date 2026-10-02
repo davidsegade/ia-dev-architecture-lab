@@ -60,10 +60,22 @@ runs:
         GITHUB_REPOSITORY: ${{ inputs.target-repo }}
         GITHUB_EVENT_PATH: ${{ runner.temp }}/event.json
     - name: Set outputs
+      shell: bash
+      env:
+        OUT_TASK: ${{ steps.prepare.outputs.task }}
+        OUT_ISSUE: ${{ steps.prepare.outputs.issue }}
+        OUT_BASE: ${{ steps.prepare.outputs.base }}
+        OUT_SKIP: ${{ steps.prepare.outputs.skip }}
+        OUT_FEEDBACK: ${{ steps.prepare.outputs.feedback }}
+        OUT_TARGET_CONFIG: ${{ steps.prepare.outputs.target-config }}
       run: |
-        echo "task=${{ steps.prepare.outputs.task }}" >> $GITHUB_OUTPUT
-        echo "issue=${{ steps.prepare.outputs.issue }}" >> $GITHUB_OUTPUT
-        echo "base=${{ steps.prepare.outputs.base }}" >> $GITHUB_OUTPUT
-        echo "skip=${{ steps.prepare.outputs.skip }}" >> $GITHUB_OUTPUT
-        echo "feedback=${{ steps.prepare.outputs.feedback }}" >> $GITHUB_OUTPUT
-        echo "target-config=${{ steps.prepare.outputs.target-config }}" >> $GITHUB_OUTPUT
+        {
+          echo "task=$OUT_TASK"
+          echo "issue=$OUT_ISSUE"
+          echo "base=$OUT_BASE"
+          echo "skip=$OUT_SKIP"
+          echo "feedback=$OUT_FEEDBACK"
+          echo 'target-config<<IA_DEV_CONFIG_EOF'
+          echo "$OUT_TARGET_CONFIG"
+          echo 'IA_DEV_CONFIG_EOF'
+        } >> "$GITHUB_OUTPUT"
