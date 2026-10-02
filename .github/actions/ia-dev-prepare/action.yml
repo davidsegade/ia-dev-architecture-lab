@@ -54,9 +54,10 @@ runs:
     - name: Prepare
       id: prepare
       run: |
-        node ia-dev/controller/github.mjs prepare
+        node "$IA_DEV_ENGINE"/controller/github.mjs prepare
       shell: bash
       env:
+        IA_DEV_ENGINE: ${{ github.workspace }}/ia-dev
         GH_TOKEN: ${{ inputs.target-token }}
         GITHUB_REPOSITORY: ${{ inputs.target-repo }}
         GITHUB_EVENT_PATH: ${{ runner.temp }}/event.json

@@ -48,6 +48,56 @@ test('every composite action declares shell on each run step', () => {
   }
 });
 
+/**
+ * A controller invocation that never touches the target working tree.
+ * `prepare` only reads the engine policy file and calls the GitHub API, so it does
+ * not require the target repository to be checked out at all.
+ */
+const API_ONLY = /controller\/github\.mjs prepare/;
+
+test('every controller invocation runs from the target repository root', () => {
+  // The controller resolves the workspace from process.cwd(). The engine lives in
+  // ia-dev/ and the target repository in target/, so the controller must run with
+  // working-directory: target or it silently operates on the wrong tree.
+  for (const file of compositeFiles()) {
+    for (const step of stepsOf(readFileSync(file, 'utf8'))) {
+      const body = step.keys.join('\n');
+      if (!/node "\$IA_DEV_ENGINE"\/controller\//.test(body)) continue;
+      assert.ok(
+        hasKey(step.keys, 'env'),
+        `${file} step "${step.header.trim()}" must declare IA_DEV_ENGINE in env`
+      );
+      assert.match(body, /IA_DEV_ENGINE:/, `${file} step "${step.header.trim()}" must set IA_DEV_ENGINE`);
+      if (API_ONLY.test(body)) {
+        assert.equal(
+          hasKey(step.keys, 'working-directory'),
+          false,
+          `${file} step "${step.header.trim()}" is API-only and must not depend on a target checkout`
+        );
+        continue;
+      }
+      assert.match(
+        body,
+        /working-directory: target/,
+        `${file} step "${step.header.trim()}" must run the controller with working-directory: target`
+      );
+    }
+  }
+});
+
+test('every controller invocation resolves the engine through IA_DEV_ENGINE', () => {
+  for (const file of compositeFiles()) {
+    for (const step of stepsOf(readFileSync(file, 'utf8'))) {
+      const body = step.keys.join('\n');
+      assert.equal(
+        /node ia-dev\/controller\//.test(body),
+        false,
+        `${file} step "${step.header.trim()}" hardcodes the engine path instead of using IA_DEV_ENGINE`
+      );
+    }
+  }
+});
+
 test('no composite action declares shell twice in the same step', () => {
   for (const file of compositeFiles()) {
     for (const step of stepsOf(readFileSync(file, 'utf8'))) {
