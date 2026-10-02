@@ -66,7 +66,7 @@ jobs:
           }
           EOF
       - name: IA DEV Prepare
-        uses: ./actions/ia-dev-prepare
+        uses: davidsegade/ia-dev-architecture-lab/.github/actions/ia-dev-prepare@38f48a53e8253ebc05172b4d0019e1b91f9d83b7
         with:
           target-repo: ${{ inputs.target-repo || github.event.inputs.target-repo }}
           target-token: ${{ secrets.target-token || github.token }}
@@ -81,7 +81,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: IA DEV Execute
-        uses: ./actions/ia-dev-execute
+        uses: davidsegade/ia-dev-architecture-lab/.github/actions/ia-dev-execute@38f48a53e8253ebc05172b4d0019e1b91f9d83b7
         with:
           task: ${{ needs.prepare.outputs.task }}
           target-repo: ${{ inputs.target-repo || github.event.inputs.target-repo }}
@@ -101,7 +101,7 @@ jobs:
       digest: ${{ steps.verify.outputs.digest }}
     steps:
       - name: IA DEV Verify
-        uses: ./actions/ia-dev-verify
+        uses: davidsegade/ia-dev-architecture-lab/.github/actions/ia-dev-verify@38f48a53e8253ebc05172b4d0019e1b91f9d83b7
         with:
           task: ${{ needs.prepare.outputs.task }}
           target-repo: ${{ inputs.target-repo || github.event.inputs.target-repo }}
@@ -120,7 +120,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: IA DEV Review
-        uses: ./actions/ia-dev-review
+        uses: davidsegade/ia-dev-architecture-lab/.github/actions/ia-dev-review@38f48a53e8253ebc05172b4d0019e1b91f9d83b7
         with:
           task: ${{ needs.prepare.outputs.task }}
           target-repo: ${{ inputs.target-repo || github.event.inputs.target-repo }}
@@ -146,7 +146,7 @@ jobs:
       pr-sha: ${{ steps.publish.outputs.pr-sha }}
     steps:
       - name: IA DEV Publish
-        uses: ./actions/ia-dev-publish
+        uses: davidsegade/ia-dev-architecture-lab/.github/actions/ia-dev-publish@38f48a53e8253ebc05172b4d0019e1b91f9d83b7
         with:
           target-repo: ${{ inputs.target-repo || github.event.inputs.target-repo }}
           target-token: ${{ secrets.target-token || github.token }}
@@ -167,7 +167,7 @@ jobs:
       actions: write
     steps:
       - name: IA DEV Failure
-        uses: ./actions/ia-dev-failure
+        uses: davidsegade/ia-dev-architecture-lab/.github/actions/ia-dev-failure@38f48a53e8253ebc05172b4d0019e1b91f9d83b7
         with:
           target-repo: ${{ inputs.target-repo || github.event.inputs.target-repo }}
           target-token: ${{ secrets.target-token || github.token }}
