@@ -35,6 +35,19 @@ if (!repoConfig) {
   throw new Error(`Repository ${targetRepo} not in allowlist`);
 }
 
+/**
+ * Publishes step outputs for the calling workflow.
+ *
+ * Every mode that declares composite outputs goes through here, so a declared output
+ * always has a real writer behind it instead of resolving to an empty string.
+ */
+function publish(output) {
+  for (const [key, value] of Object.entries(output)) {
+    appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${value}\n`);
+  }
+  return output;
+}
+
 const event = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
 let issueNumber;
 
@@ -90,9 +103,7 @@ if (mode === 'prepare') {
     })
   };
   
-  for (const [key, value] of Object.entries(output)) {
-    appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${value}\n`);
-  }
+  publish(output);
   
   console.log(JSON.stringify({ ...output, failed, reason }));
   
@@ -143,7 +154,8 @@ if (mode === 'prepare') {
     body: `<!-- ia-dev:ready -->\nReady for approval: ${pr.html_url}\nEvidence: ${runUrl}`
   });
   
-  console.log(JSON.stringify({ url: pr.html_url, sha, digest }));
+  const publication = publish({ 'pr-url': pr.html_url, 'pr-sha': sha });
+  console.log(JSON.stringify(publication));
   writeFileSync('bundle/publication.json', JSON.stringify({ url: pr.html_url, sha, digest }, null, 2));
   
 } else if (mode === 'failure') {
@@ -161,11 +173,8 @@ if (mode === 'prepare') {
   const comments = await api(`issues/${issueNumber}/comments?per_page=100`);
   const failures = comments.filter(comment => comment.user.type === 'Bot' && comment.body.includes('<!-- ia-dev:failed -->')).length;
   
-  if (shouldRetry(failures, issue.state, comments.length)) {
-    console.log(JSON.stringify({ retry: true, failures }));
-  } else {
-    console.log(JSON.stringify({ retry: false, failures }));
-  }
+  const outcome = shouldRetry(failures, issue.state, comments.length);
+  console.log(JSON.stringify(publish({ retry: String(outcome), failures: String(failures) })));
 } else {
   throw new Error('Unknown operation');
 }

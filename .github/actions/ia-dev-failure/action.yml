@@ -22,6 +22,13 @@ inputs:
   publish-result:
     description: 'Publish job result'
     required: true
+outputs:
+  retry:
+    description: 'Whether the controller allows another attempt for this issue'
+    value: ${{ steps.failure.outputs.retry }}
+  failures:
+    description: 'Number of failed runs recorded on the issue'
+    value: ${{ steps.failure.outputs.failures }}
 runs:
   using: 'composite'
   steps:
@@ -51,6 +58,7 @@ runs:
         merge-multiple: true
         path: target/bundle
     - name: Report failure
+      id: failure
       run: node "$IA_DEV_ENGINE"/controller/github.mjs failure
       shell: bash
       working-directory: target

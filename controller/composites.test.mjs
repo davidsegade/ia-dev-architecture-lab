@@ -98,6 +98,49 @@ test('every controller invocation resolves the engine through IA_DEV_ENGINE', ()
   }
 });
 
+/**
+ * True when a step publishes step outputs.
+ *
+ * A step either appends to GITHUB_OUTPUT from its own script, or runs a controller
+ * entry point that publishes through GITHUB_OUTPUT itself. Only github.mjs does the
+ * latter: agent.mjs and gate.mjs report through the bundle, not through outputs, so a
+ * step running one of those writes nothing a caller could read.
+ */
+function publishesOutputs(keys) {
+  const body = keys.join('\n');
+  return body.includes('GITHUB_OUTPUT') || /controller\/github\.mjs/.test(body);
+}
+
+test('every composite output resolves to a step that publishes it', () => {
+  // The regression: the review composite declared `value: ${{ steps.verdict.outputs.approved }}`
+  // while the id sat on the step running the agent, which publishes nothing. The output
+  // resolved empty and publication was skipped with every job green.
+  for (const file of compositeFiles()) {
+    const source = readFileSync(file, 'utf8');
+    const declared = [...source.matchAll(/^ {2}(\w[\w-]*):\n {4}description:.*\n {4}value: \$\{\{ steps\.([\w-]+)\.outputs\.(\w[\w-]*) \}\}/gm)];
+    for (const [, name, stepId, outputName] of declared) {
+      const step = stepsOf(source).find(candidate => new RegExp(`^ {6}id: ${stepId}$`, 'm').test(candidate.keys.join('\n')));
+      assert.ok(step, `${file} output ${name} reads steps.${stepId}.outputs, but no step has id: ${stepId}`);
+      assert.ok(
+        publishesOutputs(step.keys),
+        `${file} step "${step.header.trim()}" has id: ${stepId} but never publishes ${outputName}`
+      );
+    }
+  }
+});
+
+test('every step that publishes outputs carries an id', () => {
+  for (const file of compositeFiles()) {
+    for (const step of stepsOf(readFileSync(file, 'utf8'))) {
+      if (!publishesOutputs(step.keys)) continue;
+      assert.ok(
+        hasKey(step.keys, 'id'),
+        `${file} step "${step.header.trim()}" publishes outputs without an id, so no caller can read them`
+      );
+    }
+  }
+});
+
 test('no composite action declares shell twice in the same step', () => {
   for (const file of compositeFiles()) {
     for (const step of stepsOf(readFileSync(file, 'utf8'))) {
