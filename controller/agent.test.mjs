@@ -18,6 +18,15 @@ function runAgent(args, env = {}) {
   });
 }
 
+test('the result artifact exposes the reviewer verdict at the top level', () => {
+  // The regression: the verdict was only nested under attempts[].verdict, so the review
+  // composite read `undefined` and publication was silently skipped.
+  const source = agentSource();
+  assert.match(source, /approved: verdict\.approved/);
+  assert.match(source, /findings: verdict\.findings/);
+  assert.match(source, /let verdict = null;/);
+});
+
 test('the retry loop variables are reassignable', () => {
   // The retry loop reassigns success and feedback; const declarations throw at runtime
   // only after a failed attempt, which is unreachable from a green test run.
