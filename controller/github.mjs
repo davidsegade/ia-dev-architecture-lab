@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync, appendFileSync } from 'node:fs';
 import { command, inspectPatch, getAllowedPaths } from './gate.mjs';
-import { taskFromIssue } from './tasks.mjs';
+import { taskCatalog, taskFromIssue } from './tasks.mjs';
 import { loadConfig } from './config.mjs';
 import { decision, shouldRetry } from './lifecycle.mjs';
 
@@ -115,8 +115,12 @@ if (mode === 'prepare') {
     throw new Error('Artifact changed after independent verification');
   }
   
+  // The task is read against the catalog the engine policy actually allows for this
+  // repository. Checking it against the engine's own synthetic tasks made publication
+  // impossible for every repository that brings its own task.
   const review = JSON.parse(readFileSync('bundle/review-result.json', 'utf8'));
-  if (!review.success || review.task !== taskFromIssue(issue.body || '')) {
+  const reviewed = taskFromIssue(issue.body || '', Object.keys(taskCatalog()));
+  if (!review.success || review.task !== reviewed) {
     throw new Error('Independent review missing');
   }
   
