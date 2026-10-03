@@ -45,6 +45,32 @@ export function changedPaths(baseline, after) {
     .filter(name => baseline[name] !== after[name]);
 }
 
+/**
+ * Copies the allowlisted part of a repository into the agent's sandbox.
+ *
+ * The allowlist is a set of policy globs such as `lib/**`, so the sandbox is built from
+ * the concrete files those globs cover rather than from the globs themselves. Resolving
+ * `lib/**` on disk fails, which is how a sandbox ended up empty and the reviewer was
+ * asked to approve a change it could not see.
+ *
+ * Symbolic links are left out: copying one would materialise its target as a regular
+ * file, and a sandbox holding a link is rejected by the gate anyway.
+ *
+ * @returns the relative paths copied into the sandbox.
+ */
+export function copySandbox(src, dest, patterns) {
+  const names = listFiles(src).filter(name => {
+    if (!patterns.some(pattern => matchesPath(name, pattern))) return false;
+    return !lstatSync(resolve(src, name)).isSymbolicLink();
+  });
+  for (const name of names) {
+    const destination = resolve(dest, name);
+    mkdirSync(resolve(destination, '..'), { recursive: true });
+    cpSync(resolve(src, name), destination);
+  }
+  return names;
+}
+
 /** True when every changed path is covered by the allowlist globs. */
 export function withinAllowedPaths(names, allowedPaths) {
   return names.every(name => allowedPaths.some(pattern => matchesPath(name, pattern)));
