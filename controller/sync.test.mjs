@@ -1,10 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { changedPaths, copyBack, matchesPath, withinAllowedPaths } from './sync.mjs';
+import { changedPaths, copyBack, copySandbox, matchesPath, withinAllowedPaths } from './sync.mjs';
 
 const ALLOWED = ['lib/**', 'test/**'];
 
@@ -113,4 +113,58 @@ test('a traversing name cannot write above the workspace root', () => {
   // join() normalises the traversal, so the write stays inside the target tree.
   assert.deepEqual(copyBack(candidate, target, 'packages/app', ['../escaped.dart']), []);
   assert.equal(readFileSync(join(target, '..', 'escaped.dart'), 'utf8'), 'untouched\n');
+});
+function repository() {
+  const root = mkdtempSync(join(tmpdir(), 'ia-dev-repo-'));
+  mkdirSync(join(root, 'lib'), { recursive: true });
+  mkdirSync(join(root, 'lib', 'deep'), { recursive: true });
+  mkdirSync(join(root, 'test'), { recursive: true });
+  mkdirSync(join(root, '.github'), { recursive: true });
+  writeFileSync(join(root, 'lib', 'app.dart'), 'library app\n');
+  writeFileSync(join(root, 'lib', 'deep', 'nested.dart'), 'nested\n');
+  writeFileSync(join(root, 'test', 'widget_test.dart'), 'void main() {}\n');
+  writeFileSync(join(root, 'pubspec.yaml'), 'name: turno\n');
+  writeFileSync(join(root, '.github', 'ci.yml'), 'on: push\n');
+  return { root, sandbox: mkdtempSync(join(tmpdir(), 'ia-dev-sandbox-')) };
+}
+
+test('the sandbox is built from the files the policy globs cover', () => {
+  // The regression: the copier resolved `lib/**` on disk, which does not exist, so the
+  // sandbox stayed empty and the reviewer was asked to judge a change it could not see.
+  const { root, sandbox } = repository();
+  const copied = copySandbox(root, sandbox, ALLOWED);
+  assert.deepEqual(copied.sort(), ['lib/app.dart', 'lib/deep/nested.dart', 'test/widget_test.dart']);
+  assert.equal(readFileSync(join(sandbox, 'lib', 'deep', 'nested.dart'), 'utf8'), 'nested\n');
+});
+
+test('the sandbox holds nothing outside the allowlist', () => {
+  const { root, sandbox } = repository();
+  copySandbox(root, sandbox, ALLOWED);
+  assert.equal(existsSync(join(sandbox, 'pubspec.yaml')), false);
+  assert.equal(existsSync(join(sandbox, '.github', 'ci.yml')), false);
+});
+
+test('a literal policy path is sandboxed too', () => {
+  const { root, sandbox } = repository();
+  assert.deepEqual(copySandbox(root, sandbox, ['pubspec.yaml']), ['pubspec.yaml']);
+});
+
+test('a symbolic link is left out of the sandbox', () => {
+  const { root, sandbox } = repository();
+  rmSync(join(root, 'lib', 'deep', 'nested.dart'));
+  symlinkSync(join(root, 'pubspec.yaml'), join(root, 'lib', 'deep', 'nested.dart'));
+  const copied = copySandbox(root, sandbox, ALLOWED);
+  assert.deepEqual(copied, ['lib/app.dart', 'test/widget_test.dart']);
+  assert.equal(existsSync(join(sandbox, 'lib', 'deep', 'nested.dart')), false);
+});
+
+test('a policy matching nothing copies nothing', () => {
+  const { root, sandbox } = repository();
+  assert.deepEqual(copySandbox(root, sandbox, ['docs/**']), []);
+});
+
+test('a repository with an empty directory does not fail the sandbox build', () => {
+  const { root, sandbox } = repository();
+  mkdirSync(join(root, 'lib', 'empty'), { recursive: true });
+  assert.deepEqual(copySandbox(root, sandbox, ['lib/**']), ['lib/app.dart', 'lib/deep/nested.dart']);
 });

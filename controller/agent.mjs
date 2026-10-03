@@ -5,7 +5,7 @@ import { resolve, join, relative } from 'node:path';
 import { taskCatalog } from './tasks.mjs';
 import { command, inspectPatch, verify, getAllowedPaths, getProtectedPaths } from './gate.mjs';
 import { permissionsFor } from './permissions.mjs';
-import { copyBack, changedPaths, withinAllowedPaths } from './sync.mjs';
+import { copyBack, changedPaths, copySandbox, withinAllowedPaths } from './sync.mjs';
 
 const root = process.cwd();
 const [mode, task] = process.argv.slice(2);
@@ -23,21 +23,14 @@ const bundle = resolve(root,'bundle'); mkdirSync(bundle,{recursive:true});
 const work = resolve(root,'.work',mode); mkdirSync(work,{recursive:true});
 const candidate = join(work,'candidate'); mkdirSync(candidate,{recursive:true});
 
-function copyWorkspace(src, dest, paths) {
-  for (const pattern of paths) {
-    const srcPath = resolve(src, pattern);
-    const destPath = join(dest, pattern);
-    try {
-      if (lstatSync(srcPath).isDirectory()) {
-        cpSync(srcPath, destPath, { recursive: true });
-      } else {
-        mkdirSync(join(destPath, '..'), { recursive: true });
-        cpSync(srcPath, destPath);
-      }
-    } catch {
-      // ignore missing files
-    }
-  }
+// The sandbox holds only the allowlisted part of the repository, expanded from the
+// policy globs. An empty sandbox would make the author edit nothing and the reviewer
+// judge a change it cannot see, so it is refused here rather than downstream.
+const sandboxFiles = copySandbox(resolve(root, workspaceRoot), candidate, allowedPaths);
+if (!sandboxFiles.length) {
+  throw new Error(
+    `The allowlist ${allowedPaths.join(', ')} matches no file in ${workspaceRoot}; nothing to work on`
+  );
 }
 
 function inventory(directory, prefix='') {
@@ -50,8 +43,6 @@ function inventory(directory, prefix='') {
   }
   return files;
 }
-
-copyWorkspace(resolve(root, workspaceRoot), candidate, allowedPaths);
 
 const baseline = inventory(candidate);
 
@@ -138,7 +129,7 @@ for (let attempt = 1; attempt <= (mode === 'write' ? 2 : 1); attempt++) {
 // The reviewer verdict is exposed at the top level so a caller can gate on it without
 // knowing the shape of the attempt log.
 writeFileSync(join(bundle, `${mode}-result.json`), JSON.stringify({
-  success, task, model, attempts,
+  success, task, model, sandbox: sandboxFiles.length, attempts,
   ...(verdict ? { approved: verdict.approved, findings: verdict.findings } : {})
 }, null, 2));
 console.log(JSON.stringify({ success, task, mode, attempts }));
