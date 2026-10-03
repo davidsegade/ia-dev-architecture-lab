@@ -45,8 +45,20 @@ function parseEvents(raw) {
   });
 }
 
-/** The last free-text message, stripped of a markdown fence. */
+/** The last free-text message, stripped of markdown fences and trailing prose. */
 function finalText(events) {
   const text = (events.filter(event => event.type === 'text').at(-1)?.part?.text || '').trim();
-  return text.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
+  // Models often wrap the JSON verdict in ```json fences and then add explanatory text.
+  // Extract the first valid JSON object to be robust.
+  const fenced = text.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
+  const firstBrace = fenced.indexOf('{');
+  if (firstBrace === -1) return fenced;
+  let depth = 0;
+  for (let i = firstBrace; i < fenced.length; i++) {
+    if (fenced[i] === '{') depth++;
+    else if (fenced[i] === '}') {
+      if (--depth === 0) return fenced.slice(firstBrace, i + 1);
+    }
+  }
+  return fenced;
 }

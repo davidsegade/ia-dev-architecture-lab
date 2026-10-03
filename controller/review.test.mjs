@@ -77,7 +77,25 @@ test('a verdict wrapped in a markdown fence is still read', () => {
   assert.equal(verdict.approved, true);
 });
 
-test('prose after the verdict does not hide a rejection', () => {
-  const raw = events(null, { text: 'Looks good.\n{"approved":true,"findings":[]}' });
+test('prose after the verdict is ignored once a JSON object is found', () => {
+  // The robust parser extracts the first JSON object and ignores trailing text.
+  const raw = events({ approved: true, findings: [] }, { text: 'Looks good.\n{"approved":true,"findings":[]}' });
+  const verdict = reviewVerdict(raw, CHANGED);
+  assert.equal(verdict.approved, true);
+});
+
+test('the reviewer verdict parser tolerates markdown fences followed by prose', () => {
+  // The regression: the model returned ```json\n{"approved":true,"findings":[]}\n```
+  // followed by explanatory text, which broke JSON.parse.
+  const raw = events(
+    { approved: true, findings: [] },
+    { text: '```json\n{"approved":true,"findings":[]}\n```\n\n`test/widget_test.dart:15-17` adds a dummy test.' }
+  );
+  const verdict = reviewVerdict(raw, CHANGED);
+  assert.deepEqual(verdict, { approved: true, findings: [] });
+});
+
+test('a non-JSON reviewer response fails closed', () => {
+  const raw = events(null, { text: 'looks good to me' });
   assert.throws(() => reviewVerdict(raw, CHANGED), /Invalid reviewer verdict/);
 });
