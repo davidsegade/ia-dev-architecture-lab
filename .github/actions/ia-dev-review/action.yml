@@ -5,6 +5,10 @@ outputs:
     description: 'Whether the independent reviewer approved the change'
     value: ${{ steps.verdict.outputs.approved }}
 inputs:
+  context-profile:
+    description: Optional bounded Graphify and ECC context profile
+    required: false
+    default: legacy
   task:
     description: 'Task name'
     required: true
@@ -76,6 +80,12 @@ runs:
         BUILD_COMMAND: ${{ inputs.build-command }}
         WORKSPACE_ROOT: ${{ inputs.workspace-root }}
         GITHUB_REPOSITORY: ${{ inputs.target-repo }}
+    - name: Install local AST context extractor
+      if: inputs.context-profile == 'graphify-ecc'
+      shell: bash
+      run: |
+        python3 -m venv "$RUNNER_TEMP/graphify"
+        "$RUNNER_TEMP/graphify/bin/pip" install --disable-pip-version-check graphifyy==0.9.79
     - name: Install OpenCode
       run: npm install --prefix "$RUNNER_TEMP/opencode" --no-audit --no-fund opencode-ai@1.18.34
       shell: bash
@@ -88,6 +98,8 @@ runs:
         IA_DEV_ENGINE: ${{ github.workspace }}/ia-dev
         TASK: ${{ inputs.task }}
         OPENCODE_BIN: ${{ runner.temp }}/opencode/node_modules/.bin/opencode
+        GRAPHIFY_BIN: ${{ runner.temp }}/graphify/bin/graphify
+        IA_DEV_CONTEXT: ${{ inputs.context-profile }}
         ALLOWED_PATHS: ${{ inputs.allowed-paths }}
         PROTECTED_PATHS: ${{ inputs.protected-paths }}
         ACCEPTANCE_COMMAND: ${{ inputs.acceptance-command }}

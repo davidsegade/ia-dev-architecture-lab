@@ -56,11 +56,17 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '24'
+      - name: Install local AST context extractor
+        run: |
+          python3 -m venv "$RUNNER_TEMP/graphify"
+          "$RUNNER_TEMP/graphify/bin/pip" install --disable-pip-version-check graphifyy==0.9.79
       - run: npm install --prefix "$RUNNER_TEMP/opencode" --no-audit --no-fund opencode-ai@1.18.34
       - run: node controller/agent.mjs write "$TASK"
         env:
           TASK: ${{ needs.prepare.outputs.task }}
           OPENCODE_BIN: ${{ runner.temp }}/opencode/node_modules/.bin/opencode
+          GRAPHIFY_BIN: ${{ runner.temp }}/graphify/bin/graphify
+          IA_DEV_CONTEXT: graphify-ecc
           FEEDBACK_BASE64: ${{ needs.prepare.outputs.feedback }}
       - if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -117,11 +123,17 @@ jobs:
       - run: node controller/gate.mjs "$TASK" bundle/change.patch
         env:
           TASK: ${{ needs.prepare.outputs.task }}
+      - name: Install local AST context extractor
+        run: |
+          python3 -m venv "$RUNNER_TEMP/graphify"
+          "$RUNNER_TEMP/graphify/bin/pip" install --disable-pip-version-check graphifyy==0.9.79
       - run: npm install --prefix "$RUNNER_TEMP/opencode" --no-audit --no-fund opencode-ai@1.18.34
       - run: node controller/agent.mjs review "$TASK"
         env:
           TASK: ${{ needs.prepare.outputs.task }}
           OPENCODE_BIN: ${{ runner.temp }}/opencode/node_modules/.bin/opencode
+          GRAPHIFY_BIN: ${{ runner.temp }}/graphify/bin/graphify
+          IA_DEV_CONTEXT: graphify-ecc
       - if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:

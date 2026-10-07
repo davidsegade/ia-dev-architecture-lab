@@ -36,3 +36,14 @@ Local controller checks and cloud execution are separate evidence. Architecture 
 - https://opencode.ai/docs/zen/
 - https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency
 - https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches
+
+
+## Graphify + selective ECC context
+
+The laboratory author and reviewer now receive a bounded navigation packet before each attempt. Graphify 0.9.79 indexes only the allowlisted candidate with local AST extraction (`--code-only --no-cluster`); the engine queries the registered task with a 1000-token output budget. The complete additional packet is capped at 6000 characters. It is rebuilt for the reviewer from the modified candidate and saved as `bundle/<mode>-context-<attempt>.json`. Source-derived output is untrusted navigation data; actual files and independent acceptance remain authoritative.
+
+The ECC adaptation uses brief planning, version-controlled project memory in `config/project-memory.json`, and independent verification. It installs no ECC plugin, hooks, agents or bulk skill catalog. Memory is reviewed context, never a source of permissions or executable instructions. Other repositories have no memory entry until explicitly added through review. This is a selective implementation of ECC principles, not a claim of full ECC installation.
+
+Set `IA_DEV_CONTEXT=graphify-ecc` and `GRAPHIFY_BIN` to the installed executable for local runs. The laboratory workflow enables this profile. Reusable execute/review actions accept `context-profile: graphify-ecc`; their default stays `legacy`, so existing TURNEO callers remain unchanged. Missing or empty maps fail before model execution. Extraction has no model cost; querying and sending context still consumes tokens. No measured net token/time saving is claimed.
+
+ECC reference reviewed: https://github.com/affaan-m/ECC at `ef648e01899ba3e8dc6371642deaaf64b4477775`. Graphify reference: https://github.com/jarkius-ai/graphify. Existing free-model routing, credentials isolation, acceptance, review, branch protection and human merge remain in force.
