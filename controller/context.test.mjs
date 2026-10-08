@@ -16,15 +16,17 @@ function fixture() {
 
 function graph() {
   return {
-    graph: { schema_version: 1, graphify_version: GRAPHIFY_VERSION },
     nodes: [
-      { id: 'route', label: 'createRoute', source_file: 'route.ts', node_kind: 'function' }
+      { id: 'route', label: 'createRoute()', source_file: 'route.ts', file_type: 'code' }
     ],
-    links: []
+    edges: [],
+    hyperedges: [],
+    input_tokens: 0,
+    output_tokens: 0
   };
 }
 
-test('locked Graphify toolchain is installed with no dependency resolution', async () => {
+test('locked Graphify toolchain is installed with no dependency resolution and version verified', async () => {
   const root = mkdtempSync(join(tmpdir(), 'ia-dev-graphify-tool-'));
   const directory = join(root, 'venv');
   const lockPath = join(root, 'requirements.lock');
@@ -35,20 +37,60 @@ test('locked Graphify toolchain is installed with no dependency resolution', asy
     if (args[0] === '-m' && args[1] === 'venv') {
       mkdirSync(join(directory, 'bin'), { recursive: true });
       writeFileSync(join(directory, 'bin', 'python'), '');
-    } else if (args.includes('pip')) {
-      writeFileSync(join(directory, 'bin', 'graphify'), '');
+      return { code: 0, timedOut: false, stdout: '' };
     }
-    return { code: 0, timedOut: false };
+    if (args.includes('pip')) {
+      writeFileSync(join(directory, 'bin', 'graphify'), '');
+      return { code: 0, timedOut: false, stdout: '' };
+    }
+    if (args[0] === '-c') return { code: 0, timedOut: false, stdout: '0.9.80\n' };
+    return { code: 1, timedOut: false, stdout: '' };
   };
   const binary = await ensureGraphifyToolchain({ directory, lockPath, run, env: { PATH: '/bin' } });
   assert.equal(binary, join(directory, 'bin', 'graphify'));
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 3);
   assert.deepEqual(calls[0].args, ['-m', 'venv', directory]);
   assert.deepEqual(calls[1].args, [
     '-m', 'pip', 'install', '--disable-pip-version-check', '--no-input', '--no-deps', '-r', lockPath
   ]);
+  assert.match(calls[2].args[1], /importlib\.metadata\.version\("graphifyy"\)/);
   assert.equal(calls[1].options.timeout, 180000);
+  assert.equal(calls[2].options.timeout, 10000);
   assert.equal(existsSync(binary), true);
+});
+
+test('existing Graphify venv is version-checked before reuse', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'ia-dev-graphify-existing-'));
+  const directory = join(root, 'venv');
+  mkdirSync(join(directory, 'bin'), { recursive: true });
+  writeFileSync(join(directory, 'bin', 'python'), '');
+  writeFileSync(join(directory, 'bin', 'graphify'), '');
+  const calls = [];
+  const binary = await ensureGraphifyToolchain({
+    directory,
+    run: async (command, args, options) => {
+      calls.push({ command, args, options });
+      return { code: 0, timedOut: false, stdout: '0.9.80\n' };
+    }
+  });
+  assert.equal(binary, join(directory, 'bin', 'graphify'));
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].args[0], '-c');
+});
+
+test('unexpected installed Graphify package version fails closed', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'ia-dev-graphify-version-'));
+  const directory = join(root, 'venv');
+  mkdirSync(join(directory, 'bin'), { recursive: true });
+  writeFileSync(join(directory, 'bin', 'python'), '');
+  writeFileSync(join(directory, 'bin', 'graphify'), '');
+  await assert.rejects(
+    () => ensureGraphifyToolchain({
+      directory,
+      run: async () => ({ code: 0, timedOut: false, stdout: '0.9.81\n' })
+    }),
+    /Unexpected installed Graphify version: 0\.9\.81/
+  );
 });
 
 test('locked toolchain install failure fails closed', async () => {
@@ -58,7 +100,7 @@ test('locked toolchain install failure fails closed', async () => {
   await assert.rejects(
     () => ensureGraphifyToolchain({
       directory: join(root, 'venv'), lockPath,
-      run: async () => ({ code: 1, timedOut: false })
+      run: async () => ({ code: 1, timedOut: false, stdout: '' })
     }),
     /venv creation failed/
   );
@@ -111,20 +153,5 @@ test('missing graph output fails closed', async () => {
   await assert.rejects(
     () => buildRankedContext({ candidate, directory, specification: 'x', run: async () => ({ code: 0, timedOut: false }) }),
     /graph\.json missing or invalid/
-  );
-});
-
-test('ranker rejects Graphify version drift', async () => {
-  const { candidate, directory } = fixture();
-  const run = async () => {
-    mkdirSync(join(directory, 'graphify-out'), { recursive: true });
-    const bad = graph();
-    bad.graph.graphify_version = '0.9.81';
-    writeFileSync(join(directory, 'graphify-out', 'graph.json'), JSON.stringify(bad));
-    return { code: 0, timedOut: false };
-  };
-  await assert.rejects(
-    () => buildRankedContext({ candidate, directory, specification: 'x', run }),
-    /Unexpected Graphify version/
   );
 });
