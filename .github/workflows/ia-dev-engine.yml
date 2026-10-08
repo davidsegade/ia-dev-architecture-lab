@@ -230,7 +230,7 @@ jobs:
           PROTECTED_PATHS: ${{ toJSON(fromJSON(needs.prepare.outputs.target-config).protected_paths) }}
           SENSITIVE_PATHS: ${{ toJSON(fromJSON(needs.prepare.outputs.target-config).sensitive_paths) }}
           ACCEPTANCE_COMMAND: ${{ fromJSON(needs.prepare.outputs.target-config).acceptance_command }}
-          BUILD_COMMAND: ${{ fromJSON(fromJSON(toJSON(needs.prepare.outputs.target-config))).build_command || fromJSON(needs.prepare.outputs.target-config).build_command }}
+          BUILD_COMMAND: ${{ fromJSON(needs.prepare.outputs.target-config).build_command }}
           WORKSPACE_ROOT: ${{ fromJSON(needs.prepare.outputs.target-config).workspace_root }}
           CONFIG_PATH: ${{ github.workspace }}/.ia-dev-engine/config/repositories.yml
       - name: Upload review evidence
