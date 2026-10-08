@@ -100,8 +100,11 @@ jobs:
           TASK: ${{ needs.prepare.outputs.task }}
           OPENCODE_BIN: ${{ runner.temp }}/opencode/node_modules/.bin/opencode
           FEEDBACK_BASE64: ${{ needs.prepare.outputs.feedback }}
-          ALLOWED_PATHS: ${{ toJSON(fromJSON(needs.prepare.outputs.target-config).allowed_paths) }}
+          CONTEXT_PATHS: ${{ toJSON(fromJSON(needs.prepare.outputs.target-config).context_paths) }}
+          WRITE_PATHS: ${{ toJSON(fromJSON(needs.prepare.outputs.target-config).write_paths) }}
+          ALLOWED_PATHS: ${{ toJSON(fromJSON(needs.prepare.outputs.target-config).write_paths) }}
           PROTECTED_PATHS: ${{ toJSON(fromJSON(needs.prepare.outputs.target-config).protected_paths) }}
+          SENSITIVE_PATHS: ${{ toJSON(fromJSON(needs.prepare.outputs.target-config).sensitive_paths) }}
           ACCEPTANCE_COMMAND: ${{ fromJSON(needs.prepare.outputs.target-config).acceptance_command }}
           BUILD_COMMAND: ${{ fromJSON(needs.prepare.outputs.target-config).build_command }}
           WORKSPACE_ROOT: ${{ fromJSON(needs.prepare.outputs.target-config).workspace_root }}
@@ -155,7 +158,8 @@ jobs:
         env:
           IA_DEV_ENGINE: ${{ github.workspace }}/.ia-dev-engine
           TASK: ${{ needs.prepare.outputs.task }}
-          ALLOWED_PATHS: ${{ toJSON(fromJSON(needs.prepare.outputs.target-config).allowed_paths) }}
+          WRITE_PATHS: ${{ toJSON(fromJSON(needs.prepare.outputs.target-config).write_paths) }}
+          ALLOWED_PATHS: ${{ toJSON(fromJSON(needs.prepare.outputs.target-config).write_paths) }}
           PROTECTED_PATHS: ${{ toJSON(fromJSON(needs.prepare.outputs.target-config).protected_paths) }}
           ACCEPTANCE_COMMAND: ${{ fromJSON(needs.prepare.outputs.target-config).acceptance_command }}
           BUILD_COMMAND: ${{ fromJSON(needs.prepare.outputs.target-config).build_command }}
@@ -204,7 +208,8 @@ jobs:
         env:
           IA_DEV_ENGINE: ${{ github.workspace }}/.ia-dev-engine
           TASK: ${{ needs.prepare.outputs.task }}
-          ALLOWED_PATHS: ${{ toJSON(fromJSON(needs.prepare.outputs.target-config).allowed_paths) }}
+          WRITE_PATHS: ${{ toJSON(fromJSON(needs.prepare.outputs.target-config).write_paths) }}
+          ALLOWED_PATHS: ${{ toJSON(fromJSON(needs.prepare.outputs.target-config).write_paths) }}
           PROTECTED_PATHS: ${{ toJSON(fromJSON(needs.prepare.outputs.target-config).protected_paths) }}
           ACCEPTANCE_COMMAND: ${{ fromJSON(needs.prepare.outputs.target-config).acceptance_command }}
           BUILD_COMMAND: ${{ fromJSON(needs.prepare.outputs.target-config).build_command }}
@@ -219,8 +224,11 @@ jobs:
           IA_DEV_ENGINE: ${{ github.workspace }}/.ia-dev-engine
           TASK: ${{ needs.prepare.outputs.task }}
           OPENCODE_BIN: ${{ runner.temp }}/opencode/node_modules/.bin/opencode
-          ALLOWED_PATHS: ${{ toJSON(fromJSON(needs.prepare.outputs.target-config).allowed_paths) }}
+          CONTEXT_PATHS: ${{ toJSON(fromJSON(needs.prepare.outputs.target-config).context_paths) }}
+          WRITE_PATHS: ${{ toJSON(fromJSON(needs.prepare.outputs.target-config).write_paths) }}
+          ALLOWED_PATHS: ${{ toJSON(fromJSON(needs.prepare.outputs.target-config).write_paths) }}
           PROTECTED_PATHS: ${{ toJSON(fromJSON(needs.prepare.outputs.target-config).protected_paths) }}
+          SENSITIVE_PATHS: ${{ toJSON(fromJSON(needs.prepare.outputs.target-config).sensitive_paths) }}
           ACCEPTANCE_COMMAND: ${{ fromJSON(needs.prepare.outputs.target-config).acceptance_command }}
           BUILD_COMMAND: ${{ fromJSON(needs.prepare.outputs.target-config).build_command }}
           WORKSPACE_ROOT: ${{ fromJSON(needs.prepare.outputs.target-config).workspace_root }}
@@ -282,7 +290,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           EXPECTED_DIGEST: ${{ needs.verify.outputs.digest }}
           BASE_SHA: ${{ needs.prepare.outputs.base }}
-          ALLOWED_PATHS: ${{ toJSON(fromJSON(needs.prepare.outputs.target-config).allowed_paths) }}
+          WRITE_PATHS: ${{ toJSON(fromJSON(needs.prepare.outputs.target-config).write_paths) }}
+          ALLOWED_PATHS: ${{ toJSON(fromJSON(needs.prepare.outputs.target-config).write_paths) }}
           PROTECTED_PATHS: ${{ toJSON(fromJSON(needs.prepare.outputs.target-config).protected_paths) }}
           CONFIG_PATH: ${{ github.workspace }}/.ia-dev-engine/config/repositories.yml
       - name: Upload publication evidence

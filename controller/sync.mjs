@@ -17,7 +17,7 @@ function contained(base, name) {
  *
  * The allowlisted paths are globs such as `lib/**`, not file paths, so they cannot be
  * resolved on disk. The caller passes the concrete relative paths the agent changed,
- * already checked against the allowlist, and only those files are copied back.
+ * already checked against the write allowlist, and only those files are copied back.
  *
  * @returns the relative paths that were actually copied.
  */
@@ -46,21 +46,18 @@ export function changedPaths(baseline, after) {
 }
 
 /**
- * Copies the allowlisted part of a repository into the agent's sandbox.
+ * Copies the readable part of a repository into the agent sandbox.
  *
- * The allowlist is a set of policy globs such as `lib/**`, so the sandbox is built from
- * the concrete files those globs cover rather than from the globs themselves. Resolving
- * `lib/**` on disk fails, which is how a sandbox ended up empty and the reviewer was
- * asked to approve a change it could not see.
- *
- * Symbolic links are left out: copying one would materialise its target as a regular
- * file, and a sandbox holding a link is rejected by the gate anyway.
+ * `patterns` are context/read globs. `excludedPatterns` are engine-owned sensitive
+ * globs that must never enter model context even when a broad context glob would match.
+ * Symbolic links are left out rather than followed.
  *
  * @returns the relative paths copied into the sandbox.
  */
-export function copySandbox(src, dest, patterns) {
+export function copySandbox(src, dest, patterns, excludedPatterns = []) {
   const names = listFiles(src).filter(name => {
     if (!patterns.some(pattern => matchesPath(name, pattern))) return false;
+    if (excludedPatterns.some(pattern => matchesPath(name, pattern))) return false;
     return !lstatSync(resolve(src, name)).isSymbolicLink();
   });
   for (const name of names) {
@@ -71,9 +68,14 @@ export function copySandbox(src, dest, patterns) {
   return names;
 }
 
-/** True when every changed path is covered by the allowlist globs. */
+/** True when every changed path is covered by the write allowlist globs. */
 export function withinAllowedPaths(names, allowedPaths) {
   return names.every(name => allowedPaths.some(pattern => matchesPath(name, pattern)));
+}
+
+/** True when any path matches one of the supplied policy globs. */
+export function matchesAnyPath(names, patterns = []) {
+  return names.some(name => patterns.some(pattern => matchesPath(name, pattern)));
 }
 
 /**

@@ -17,21 +17,37 @@ export function parsePathList(raw, fallback) {
   return trimmed.split(',').map(entry => entry.trim()).filter(Boolean);
 }
 
+/** Explicit IA DEV 2.1 write surface, with IA DEV 2.0 ALLOWED_PATHS fallback. */
+export function getWritePaths() {
+  return parsePathList(process.env.WRITE_PATHS || process.env.ALLOWED_PATHS, ['src/main.mjs', 'tests/main.test.mjs']);
+}
+
+/** Read/context surface. It may be broader than write paths, never narrower by accident. */
+export function getContextPaths() {
+  return parsePathList(process.env.CONTEXT_PATHS, getWritePaths());
+}
+
+/** Files matching these globs must never enter an agent/context-builder sandbox. */
+export function getSensitivePaths() {
+  return parsePathList(process.env.SENSITIVE_PATHS, []);
+}
+
+/** Backward-compatible alias used by IA DEV 2.0 tests and publication code. */
 export function getAllowedPaths() {
-  return parsePathList(process.env.ALLOWED_PATHS, ['src/main.mjs', 'tests/main.test.mjs']);
+  return getWritePaths();
 }
 
 export function getProtectedPaths() {
   return parsePathList(process.env.PROTECTED_PATHS, ['config/repositories.yml', '.github/**', 'controller/**', 'package.json']);
 }
 
-export function inspectPatch(patch, allowedPaths = getAllowedPaths(), protectedPaths = getProtectedPaths()) {
+export function inspectPatch(patch, writePaths = getWritePaths(), protectedPaths = getProtectedPaths()) {
   if (!patch || Buffer.byteLength(patch) > 100000) throw new Error('Missing or oversized patch');
   const headers = [...patch.matchAll(/^diff --git a\/(\S+) b\/(\S+)$/gm)];
   if (!headers.length) throw new Error('No changes');
   for (const [, left, right] of headers) {
     if (left !== right) throw new Error('Renames forbidden');
-    const allowed = allowedPaths.some(pattern => matchesPath(right, pattern));
+    const allowed = writePaths.some(pattern => matchesPath(right, pattern));
     if (protectedPaths.some(pattern => matchesPath(right, pattern))) throw new Error(`Protected path: ${right}`);
     if (!allowed) throw new Error(`Unauthorized path: ${right}`);
   }
@@ -51,14 +67,11 @@ const ENGINE_SELF_TASKS = ['clamp', 'chunk', 'sumCents'];
 /**
  * Independent acceptance of a change.
  *
- * `candidate` is the filtered sandbox the agent edited, so it holds only the allowlisted
- * paths and cannot stand in for a build. The commands declared in the policy therefore
- * run in `root`, the full target checkout, after the change has been copied back. That
- * is what makes the acceptance independent of the agent: it is the repository's own
- * build and test entry points, run by the engine and not by the author.
+ * `candidate` is the filtered sandbox the agent edited. Only write paths are validated
+ * as publication candidates; broader context files are read-only evidence.
  */
-export function verify(root, task, candidate, allowedPaths = getAllowedPaths(), acceptanceCommand = 'npm test', buildCommand = 'npm run build') {
-  for (const name of filesUnder(candidate, allowedPaths)) {
+export function verify(root, task, candidate, writePaths = getWritePaths(), acceptanceCommand = 'npm test', buildCommand = 'npm run build') {
+  for (const name of filesUnder(candidate, writePaths)) {
     const fullPath = resolve(candidate, name);
     let stat;
     try {
@@ -88,16 +101,14 @@ export function verify(root, task, candidate, allowedPaths = getAllowedPaths(), 
 
 if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.dirname, 'gate.mjs')) {
   const [task, patchFile] = process.argv.slice(2);
-  const allowedPaths = getAllowedPaths();
+  const writePaths = getWritePaths();
   const root = process.cwd();
   const workspaceRoot = process.env.WORKSPACE_ROOT || '.';
   const acceptanceCommand = process.env.ACCEPTANCE_COMMAND || 'npm test';
   const buildCommand = process.env.BUILD_COMMAND || 'npm run build';
-  const digest = inspectPatch(readFileSync(patchFile, 'utf8'), allowedPaths);
+  const digest = inspectPatch(readFileSync(patchFile, 'utf8'), writePaths);
   command('git', ['apply', '--check', patchFile], root);
   command('git', ['apply', patchFile], root);
-  // The policy commands run in the target checkout, not the filtered sandbox, so the
-  // gate sees the same tree a human would after merging.
-  const verified = verify(resolve(root, workspaceRoot), task, root, allowedPaths, acceptanceCommand, buildCommand);
+  const verified = verify(resolve(root, workspaceRoot), task, root, writePaths, acceptanceCommand, buildCommand);
   console.log(JSON.stringify({ digest, ...verified }));
 }
