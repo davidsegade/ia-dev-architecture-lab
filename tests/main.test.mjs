@@ -76,3 +76,95 @@ test('clamp throws RangeError when minimum exceeds maximum', () => {
   assert.throws(() => clamp(-2, -1, -3), RangeError);
   assert.throws(() => clamp(0.5, 0.2, 0.1), RangeError);
 });
+
+test('sumCents returns the exact sum of safe integers', () => {
+  assert.equal(sumCents([]), 0);
+  assert.equal(sumCents([0]), 0);
+  assert.equal(sumCents([1]), 1);
+  assert.equal(sumCents([125, 275]), 400);
+  assert.equal(sumCents([1, 2, 3, 4]), 10);
+});
+
+test('sumCents allows negative values', () => {
+  assert.equal(sumCents([-1]), -1);
+  assert.equal(sumCents([-5, 5]), 0);
+  assert.equal(sumCents([10, -3, -7]), 0);
+  assert.equal(sumCents([-100, -200]), -300);
+});
+
+test('sumCents keeps zero and extreme safe integer values exact', () => {
+  const max = Number.MAX_SAFE_INTEGER;
+  const min = Number.MIN_SAFE_INTEGER;
+  assert.equal(sumCents([max]), max);
+  assert.equal(sumCents([min]), min);
+  assert.equal(sumCents([max, 0]), max);
+  assert.equal(sumCents([min, 0]), min);
+  assert.equal(sumCents([max, min]), 0);
+  assert.equal(sumCents([-1, max - 1]), max - 2);
+});
+
+test('sumCents throws TypeError for non-array input', () => {
+  for (const bad of [null, undefined, '1,2', 5, true, {}, new Set([1]), new Map(), () => [1], 1n, Symbol('v')]) {
+    assert.throws(() => sumCents(bad), TypeError);
+  }
+  assert.throws(() => sumCents(), TypeError);
+});
+
+test('sumCents throws TypeError for invalid elements', () => {
+  const invalidElements = [
+    '1',
+    null,
+    undefined,
+    true,
+    false,
+    {},
+    [],
+    [1],
+    NaN,
+    Infinity,
+    -Infinity,
+    1.5,
+    -0.001,
+    0.1 + 0.2,
+    2n,
+    Symbol('1'),
+    () => 1,
+    Number.MIN_SAFE_INTEGER - 1,
+    Number.MAX_SAFE_INTEGER + 1,
+  ];
+  for (const bad of invalidElements) {
+    assert.throws(() => sumCents([bad]), TypeError, `expected TypeError for ${String(bad)}`);
+    assert.throws(() => sumCents([1, bad]), TypeError, `expected TypeError for ${String(bad)}`);
+    assert.throws(() => sumCents([bad, 1]), TypeError, `expected TypeError for ${String(bad)}`);
+  }
+});
+
+test('sumCents throws RangeError when an intermediate sum is unsafe', () => {
+  const max = Number.MAX_SAFE_INTEGER;
+  assert.throws(() => sumCents([max, 1]), RangeError);
+  assert.throws(() => sumCents([1, max]), RangeError);
+  assert.throws(() => sumCents([max - 1, 1, 1]), RangeError);
+  assert.throws(() => sumCents([max, max]), RangeError);
+});
+
+test('sumCents throws RangeError when an intermediate sum underflows', () => {
+  const min = Number.MIN_SAFE_INTEGER;
+  assert.throws(() => sumCents([min, -1]), RangeError);
+  assert.throws(() => sumCents([-1, min]), RangeError);
+  assert.throws(() => sumCents([min + 1, -1, -1]), RangeError);
+  assert.throws(() => sumCents([min, min]), RangeError);
+});
+
+test('sumCents can reach the exact safe integer bounds without throwing', () => {
+  const max = Number.MAX_SAFE_INTEGER;
+  const min = Number.MIN_SAFE_INTEGER;
+  assert.equal(sumCents([max - 1, 1]), max);
+  assert.equal(sumCents([min + 1, -1]), min);
+});
+
+test('sumCents reports TypeError before RangeError', () => {
+  const max = Number.MAX_SAFE_INTEGER;
+  assert.throws(() => sumCents([max, '1']), TypeError);
+  assert.throws(() => sumCents(['1', max + 2]), TypeError);
+  assert.throws(() => sumCents(max + 2), TypeError);
+});
