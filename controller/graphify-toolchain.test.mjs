@@ -44,9 +44,10 @@ test('Graphify environment contains no GitHub or model credential variables', ()
   assert.match(block, /DO_NOT_TRACK/);
 });
 
-test('ranked context is enabled only for code-change profile', () => {
+test('ranked context is enabled only by engine-owned profile context mode', () => {
   const source = agentSource();
-  assert.match(source, /requestProfile === 'code-change' \? 'ranked-context' : 'legacy'/);
+  assert.match(source, /const contextMode = profile\.contextMode/);
+  assert.match(source, /\['legacy', 'ranked-context'\]\.includes\(contextMode\)/);
   assert.match(source, /contextMode === 'ranked-context'/);
 });
 
