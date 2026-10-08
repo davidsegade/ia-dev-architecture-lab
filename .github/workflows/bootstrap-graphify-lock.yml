@@ -1,0 +1,27 @@
+name: IA DEV Graphify lock bootstrap
+
+on:
+  pull_request:
+    paths:
+      - "toolchain/graphify-requirements.in"
+      - ".github/workflows/bootstrap-graphify-lock.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  generate-lock:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Create isolated Python environment
+        run: python3 -m venv "$RUNNER_TEMP/graphify-lock"
+      - name: Resolve exact Graphify environment
+        run: |
+          "$RUNNER_TEMP/graphify-lock/bin/python" -m pip install --disable-pip-version-check --no-input -r toolchain/graphify-requirements.in
+          "$RUNNER_TEMP/graphify-lock/bin/python" -m pip freeze > toolchain/graphify-requirements.lock
+      - name: Emit generated lockfile for bootstrap
+        run: printf 'GRAPHIFY_LOCK_BASE64=%s\n' "$(base64 -w0 toolchain/graphify-requirements.lock)"
