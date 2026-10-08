@@ -3,6 +3,8 @@ import { command, inspectPatch, getAllowedPaths } from './gate.mjs';
 import { requestFromIssue, specificationDigest } from './tasks.mjs';
 import { loadConfig, tasksForPolicy } from './config.mjs';
 import { decision, shouldRetry, proposalBranch, proposalBelongsToIssue } from './lifecycle.mjs';
+import { createGitHubApi } from './github-api.mjs';
+import { formatRunMetrics, summarizeAgentResult } from './metrics.mjs';
 
 const targetRepo = process.env.TARGET_REPO || process.env.GITHUB_REPOSITORY;
 const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
@@ -12,20 +14,9 @@ if (!/^[\w.-]+\/[\w.-]+$/.test(targetRepo || '') || !token) {
   throw new Error('Target repo and token required');
 }
 
-async function api(path, method = 'GET', body) {
-  const response = await fetch(`https://api.github.com/repos/${targetRepo}/${path}`, {
-    method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/vnd.github+json',
-      'Content-Type': 'application/json',
-      'X-GitHub-Api-Version': '2022-11-28'
-    },
-    ...(body ? { body: JSON.stringify(body) } : {})
-  });
-  if (!response.ok) throw new Error(`GitHub ${method} ${path}: ${response.status}`);
-  return response.status === 204 ? null : await response.json();
-}
+const github = createGitHubApi({ targetRepo, token });
+const api = github.request;
+const apiAll = github.all;
 
 const config = loadConfig();
 const repoConfig = config[targetRepo];
@@ -81,8 +72,8 @@ const [mode] = process.argv.slice(2);
 if (mode === 'prepare') {
   const request = parseRequest();
 
-  const pulls = await api('pulls?state=all&per_page=100');
-  const comments = await api(`issues/${issueNumber}/comments?per_page=100`);
+  const pulls = await apiAll('pulls?state=all');
+  const comments = await apiAll(`issues/${issueNumber}/comments`);
   const proposals = pulls.filter(pr => proposalBelongsToIssue(pr, issueNumber));
   const readyMarkers = comments.filter(comment => comment.user.type === 'Bot' && comment.body.includes('<!-- ia-dev:ready -->'));
   const failed = comments.filter(comment => comment.user.type === 'Bot' && comment.body.includes('<!-- ia-dev:failed -->')).length;
@@ -172,12 +163,17 @@ if (mode === 'prepare') {
     await api(`statuses/${sha}`, 'POST', { state: 'success', context, target_url: runUrl, description: `Verified artifact ${digest.slice(0, 12)}` });
   }
 
+  const metricsText = formatRunMetrics(author, review);
+  const metrics = {
+    author: summarizeAgentResult(author),
+    reviewer: summarizeAgentResult(review)
+  };
   const pr = await api('pulls', 'POST', {
     title: `[IA DEV] ${issue.title}`,
     head: branch,
     base: baseBranch,
     draft: true,
-    body: `IA DEV execution for issue #${issueNumber}.\n\nProfile: ${reviewed.profile}. Independent acceptance and review passed. Author: ${author.model}. Reviewer: ${review.model}.\n\nEngine/workflow SHA: \`${process.env.IA_DEV_ENGINE_SHA || 'not recorded'}\`. Base: \`${current}\`. Verified/published head: \`${sha}\`. Artifact SHA-256: \`${digest}\`. Specification SHA-256: \`${requestDigest}\`.\n\nEvidence: ${runUrl}\n\nHuman approval required. No automatic merge. This proposal branch is disposable and is never force-pushed.`
+    body: `IA DEV execution for issue #${issueNumber}.\n\nProfile: ${reviewed.profile}. Independent acceptance and review passed. Author: ${author.model}. Reviewer: ${review.model}.\n\nEngine/workflow SHA: \`${process.env.IA_DEV_ENGINE_SHA || 'not recorded'}\`. Base: \`${current}\`. Verified/published head: \`${sha}\`. Artifact SHA-256: \`${digest}\`. Specification SHA-256: \`${requestDigest}\`.\n\n${metricsText}\n\nEvidence: ${runUrl}\n\nHuman approval required. No automatic merge. This proposal branch is disposable and is never force-pushed.`
   });
 
   await api(`issues/${issueNumber}/comments`, 'POST', {
@@ -186,7 +182,7 @@ if (mode === 'prepare') {
 
   const publication = publish({ 'pr-url': pr.html_url, 'pr-sha': sha });
   console.log(JSON.stringify(publication));
-  writeFileSync('bundle/publication.json', JSON.stringify({ url: pr.html_url, sha, digest, requestDigest, profile: reviewed.profile, branch, base: current }, null, 2));
+  writeFileSync('bundle/publication.json', JSON.stringify({ url: pr.html_url, sha, digest, requestDigest, profile: reviewed.profile, metrics, branch, base: current }, null, 2));
 
 } else if (mode === 'failure') {
   let feedback = '';
@@ -200,7 +196,7 @@ if (mode === 'prepare') {
   await api(`issues/${issueNumber}/comments`, 'POST', {
     body: `<!-- ia-dev:failed -->\n<!-- ia-dev:feedback:${encoded} -->\nExecution or verification failed. No automatic merge. Evidence: ${runUrl}\nThe controller allows at most three runs and stops if the issue is closed.`
   });
-  const comments = await api(`issues/${issueNumber}/comments?per_page=100`);
+  const comments = await apiAll(`issues/${issueNumber}/comments`);
   const failures = comments.filter(comment => comment.user.type === 'Bot' && comment.body.includes('<!-- ia-dev:failed -->')).length;
 
   const outcome = shouldRetry(failures, issue.state, comments.length);
