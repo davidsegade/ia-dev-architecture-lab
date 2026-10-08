@@ -76,3 +76,51 @@ test('clamp throws RangeError when minimum exceeds maximum', () => {
   assert.throws(() => clamp(-2, -1, -3), RangeError);
   assert.throws(() => clamp(0.5, 0.2, 0.1), RangeError);
 });
+
+test('chunk splits an array into consecutive pieces of the given size', () => {
+  assert.deepEqual(chunk([1, 2, 3, 4, 5], 2), [[1, 2], [3, 4], [5]]);
+  assert.deepEqual(chunk([1, 2, 3, 4], 2), [[1, 2], [3, 4]]);
+  assert.deepEqual(chunk(['a', 'b', 'c'], 1), [['a'], ['b'], ['c']]);
+  assert.deepEqual(chunk([1, 2, 3], 5), [[1, 2, 3]]);
+});
+
+test('chunk returns an empty array for an empty input', () => {
+  assert.deepEqual(chunk([], 1), []);
+  assert.deepEqual(chunk([], 3), []);
+});
+
+test('chunk does not mutate the input array', () => {
+  const input = [1, 2, 3, 4];
+  const copy = [...input];
+  const result = chunk(input, 2);
+  assert.deepEqual(input, copy);
+  assert.notEqual(result, input);
+  assert.notEqual(result[0], input);
+});
+
+test('chunk throws TypeError for a non-array first argument', () => {
+  for (const bad of ['12', null, undefined, true, {}, 3, Symbol('1'), 1n, () => 1, new Map(), new Set(), new Uint8Array([1])]) {
+    assert.throws(() => chunk(bad, 1), TypeError);
+  }
+  assert.throws(() => chunk(), TypeError);
+});
+
+test('chunk throws RangeError for an invalid size', () => {
+  for (const bad of [0, -1, -10, 1.5, 2.5, NaN, Infinity, -Infinity, '2', null, undefined, true, {}, [], Symbol('2'), 2n, () => 2, Number.MAX_SAFE_INTEGER + 2]) {
+    assert.throws(() => chunk([1, 2], bad), RangeError);
+  }
+  assert.throws(() => chunk([1, 2]), RangeError);
+});
+
+test('chunk validates the array before the size', () => {
+  assert.throws(() => chunk('12', 0), TypeError);
+  assert.throws(() => chunk(null, -1), TypeError);
+  assert.throws(() => chunk(undefined, NaN), TypeError);
+});
+
+test('chunk preserves element order and handles larger inputs', () => {
+  const values = Array.from({ length: 10 }, (_, index) => index);
+  assert.deepEqual(chunk(values, 3), [[0, 1, 2], [3, 4, 5], [6, 7, 8], [9]]);
+  assert.deepEqual(chunk(values, 10), [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]]);
+  assert.deepEqual(chunk(values, 4), [[0, 1, 2, 3], [4, 5, 6, 7], [8, 9]]);
+});
