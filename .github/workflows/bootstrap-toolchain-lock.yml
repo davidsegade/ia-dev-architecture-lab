@@ -1,0 +1,28 @@
+name: IA DEV toolchain lock bootstrap
+
+on:
+  pull_request:
+    paths:
+      - "toolchain/package.json"
+      - ".github/workflows/bootstrap-toolchain-lock.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  generate-lock:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Generate npm lockfile without running package scripts
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+        working-directory: toolchain
+      - name: Emit lockfile for bootstrap
+        run: printf 'LOCK_BASE64=%s\n' "$(base64 -w0 package-lock.json)"
+        working-directory: toolchain
