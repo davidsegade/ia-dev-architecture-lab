@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildRankedContext, GRAPHIFY_VERSION } from './context.mjs';
+import { buildRankedContext, ensureGraphifyToolchain, GRAPHIFY_VERSION } from './context.mjs';
 
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), 'ia-dev-context-'));
@@ -23,6 +23,46 @@ function graph() {
     links: []
   };
 }
+
+test('locked Graphify toolchain is installed with no dependency resolution', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'ia-dev-graphify-tool-'));
+  const directory = join(root, 'venv');
+  const lockPath = join(root, 'requirements.lock');
+  writeFileSync(lockPath, 'graphifyy==0.9.80\n');
+  const calls = [];
+  const run = async (binary, args, options) => {
+    calls.push({ binary, args, options });
+    if (args[0] === '-m' && args[1] === 'venv') {
+      mkdirSync(join(directory, 'bin'), { recursive: true });
+      writeFileSync(join(directory, 'bin', 'python'), '');
+    } else if (args.includes('pip')) {
+      writeFileSync(join(directory, 'bin', 'graphify'), '');
+    }
+    return { code: 0, timedOut: false };
+  };
+  const binary = await ensureGraphifyToolchain({ directory, lockPath, run, env: { PATH: '/bin' } });
+  assert.equal(binary, join(directory, 'bin', 'graphify'));
+  assert.equal(calls.length, 2);
+  assert.deepEqual(calls[0].args, ['-m', 'venv', directory]);
+  assert.deepEqual(calls[1].args, [
+    '-m', 'pip', 'install', '--disable-pip-version-check', '--no-input', '--no-deps', '-r', lockPath
+  ]);
+  assert.equal(calls[1].options.timeout, 180000);
+  assert.equal(existsSync(binary), true);
+});
+
+test('locked toolchain install failure fails closed', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'ia-dev-graphify-tool-fail-'));
+  const lockPath = join(root, 'requirements.lock');
+  writeFileSync(lockPath, 'graphifyy==0.9.80\n');
+  await assert.rejects(
+    () => ensureGraphifyToolchain({
+      directory: join(root, 'venv'), lockPath,
+      run: async () => ({ code: 1, timedOut: false })
+    }),
+    /venv creation failed/
+  );
+});
 
 test('context extraction is local code-only and produces bounded ranked metadata', async () => {
   const { candidate, directory } = fixture();
