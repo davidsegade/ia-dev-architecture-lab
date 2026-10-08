@@ -1,0 +1,340 @@
+name: IA DEV 2.0 engine
+
+on:
+  workflow_call:
+    inputs:
+      issue:
+        description: Owner-created issue number to execute
+        required: true
+        type: string
+      caller-workflow:
+        description: Workflow filename used for bounded automatic retry
+        required: true
+        type: string
+    outputs:
+      pr-url:
+        description: Published proposal URL when a proposal is created
+        value: ${{ jobs.publish.outputs.pr-url }}
+      pr-sha:
+        description: Verified proposal head SHA when a proposal is created
+        value: ${{ jobs.publish.outputs.pr-sha }}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ia-dev-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    outputs:
+      task: ${{ steps.prepare.outputs.task }}
+      issue: ${{ steps.prepare.outputs.issue }}
+      base: ${{ steps.prepare.outputs.base }}
+      skip: ${{ steps.prepare.outputs.skip }}
+      feedback: ${{ steps.prepare.outputs.feedback }}
+      target-config: ${{ steps.prepare.outputs.target-config }}
+    steps:
+      - name: Checkout immutable engine
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .ia-dev-engine
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Verify engine architecture
+        run: npm run test:architecture
+        working-directory: .ia-dev-engine
+      - name: Prepare request
+        id: prepare
+        run: node .ia-dev-engine/controller/github.mjs prepare
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IA_DEV_ISSUE_NUMBER: ${{ inputs.issue }}
+          CONFIG_PATH: ${{ github.workspace }}/.ia-dev-engine/config/repositories.yml
+          IA_DEV_ENGINE_SHA: ${{ job.workflow_sha }}
+
+  execute:
+    needs: prepare
+    if: needs.prepare.outputs.skip == 'false'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 9
+    steps:
+      - name: Checkout target at verified base
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ needs.prepare.outputs.base }}
+          path: target
+          persist-credentials: false
+      - name: Checkout immutable engine
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .ia-dev-engine
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Prepare target dependencies
+        if: fromJSON(needs.prepare.outputs.target-config).setup_command != ''
+        run: sh -c "$SETUP_COMMAND"
+        working-directory: target
+        env:
+          SETUP_COMMAND: ${{ fromJSON(needs.prepare.outputs.target-config).setup_command }}
+      - name: Install pinned OpenCode
+        run: npm install --prefix "$RUNNER_TEMP/opencode" --no-audit --no-fund opencode-ai@1.18.35
+        working-directory: target
+      - name: Execute scoped author
+        run: node "$IA_DEV_ENGINE/controller/agent.mjs" write "$TASK"
+        working-directory: target
+        env:
+          IA_DEV_ENGINE: ${{ github.workspace }}/.ia-dev-engine
+          TASK: ${{ needs.prepare.outputs.task }}
+          OPENCODE_BIN: ${{ runner.temp }}/opencode/node_modules/.bin/opencode
+          FEEDBACK_BASE64: ${{ needs.prepare.outputs.feedback }}
+          ALLOWED_PATHS: ${{ toJSON(fromJSON(needs.prepare.outputs.target-config).allowed_paths) }}
+          PROTECTED_PATHS: ${{ toJSON(fromJSON(needs.prepare.outputs.target-config).protected_paths) }}
+          ACCEPTANCE_COMMAND: ${{ fromJSON(needs.prepare.outputs.target-config).acceptance_command }}
+          BUILD_COMMAND: ${{ fromJSON(needs.prepare.outputs.target-config).build_command }}
+          WORKSPACE_ROOT: ${{ fromJSON(needs.prepare.outputs.target-config).workspace_root }}
+          CONFIG_PATH: ${{ github.workspace }}/.ia-dev-engine/config/repositories.yml
+      - name: Upload execution evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: execution
+          path: target/bundle/
+          retention-days: 7
+
+  verify:
+    needs: [prepare, execute]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    outputs:
+      digest: ${{ steps.verify.outputs.digest }}
+    steps:
+      - name: Checkout clean target at recorded base
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ needs.prepare.outputs.base }}
+          path: target
+          persist-credentials: false
+      - name: Checkout immutable engine
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .ia-dev-engine
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Prepare target dependencies
+        if: fromJSON(needs.prepare.outputs.target-config).setup_command != ''
+        run: sh -c "$SETUP_COMMAND"
+        working-directory: target
+        env:
+          SETUP_COMMAND: ${{ fromJSON(needs.prepare.outputs.target-config).setup_command }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: execution
+          path: target/bundle
+      - name: Independently verify patch
+        id: verify
+        run: |
+          node "$IA_DEV_ENGINE/controller/gate.mjs" "$TASK" bundle/change.patch > bundle/acceptance-result.json
+          node -e 'const fs=require("fs");const r=JSON.parse(fs.readFileSync("bundle/acceptance-result.json"));fs.appendFileSync(process.env.GITHUB_OUTPUT,`digest=${r.digest}\n`);'
+        working-directory: target
+        env:
+          IA_DEV_ENGINE: ${{ github.workspace }}/.ia-dev-engine
+          TASK: ${{ needs.prepare.outputs.task }}
+          ALLOWED_PATHS: ${{ toJSON(fromJSON(needs.prepare.outputs.target-config).allowed_paths) }}
+          PROTECTED_PATHS: ${{ toJSON(fromJSON(needs.prepare.outputs.target-config).protected_paths) }}
+          ACCEPTANCE_COMMAND: ${{ fromJSON(needs.prepare.outputs.target-config).acceptance_command }}
+          BUILD_COMMAND: ${{ fromJSON(needs.prepare.outputs.target-config).build_command }}
+          WORKSPACE_ROOT: ${{ fromJSON(needs.prepare.outputs.target-config).workspace_root }}
+      - name: Upload acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: acceptance
+          path: target/bundle/acceptance-result.json
+          retention-days: 7
+
+  review:
+    needs: [prepare, execute, verify]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - name: Checkout clean target at recorded base
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ needs.prepare.outputs.base }}
+          path: target
+          persist-credentials: false
+      - name: Checkout immutable engine
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .ia-dev-engine
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Prepare target dependencies
+        if: fromJSON(needs.prepare.outputs.target-config).setup_command != ''
+        run: sh -c "$SETUP_COMMAND"
+        working-directory: target
+        env:
+          SETUP_COMMAND: ${{ fromJSON(needs.prepare.outputs.target-config).setup_command }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: execution
+          path: target/bundle
+      - name: Re-run gate before reviewer
+        run: node "$IA_DEV_ENGINE/controller/gate.mjs" "$TASK" bundle/change.patch
+        working-directory: target
+        env:
+          IA_DEV_ENGINE: ${{ github.workspace }}/.ia-dev-engine
+          TASK: ${{ needs.prepare.outputs.task }}
+          ALLOWED_PATHS: ${{ toJSON(fromJSON(needs.prepare.outputs.target-config).allowed_paths) }}
+          PROTECTED_PATHS: ${{ toJSON(fromJSON(needs.prepare.outputs.target-config).protected_paths) }}
+          ACCEPTANCE_COMMAND: ${{ fromJSON(needs.prepare.outputs.target-config).acceptance_command }}
+          BUILD_COMMAND: ${{ fromJSON(needs.prepare.outputs.target-config).build_command }}
+          WORKSPACE_ROOT: ${{ fromJSON(needs.prepare.outputs.target-config).workspace_root }}
+      - name: Install pinned OpenCode
+        run: npm install --prefix "$RUNNER_TEMP/opencode" --no-audit --no-fund opencode-ai@1.18.35
+        working-directory: target
+      - name: Independent read-only review
+        run: node "$IA_DEV_ENGINE/controller/agent.mjs" review "$TASK"
+        working-directory: target
+        env:
+          IA_DEV_ENGINE: ${{ github.workspace }}/.ia-dev-engine
+          TASK: ${{ needs.prepare.outputs.task }}
+          OPENCODE_BIN: ${{ runner.temp }}/opencode/node_modules/.bin/opencode
+          ALLOWED_PATHS: ${{ toJSON(fromJSON(needs.prepare.outputs.target-config).allowed_paths) }}
+          PROTECTED_PATHS: ${{ toJSON(fromJSON(needs.prepare.outputs.target-config).protected_paths) }}
+          ACCEPTANCE_COMMAND: ${{ fromJSON(needs.prepare.outputs.target-config).acceptance_command }}
+          BUILD_COMMAND: ${{ fromJSON(needs.prepare.outputs.target-config).build_command }}
+          WORKSPACE_ROOT: ${{ fromJSON(needs.prepare.outputs.target-config).workspace_root }}
+          CONFIG_PATH: ${{ github.workspace }}/.ia-dev-engine/config/repositories.yml
+      - name: Upload review evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: review
+          path: target/bundle/review*
+          retention-days: 7
+
+  publish:
+    needs: [prepare, execute, verify, review]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      statuses: write
+    outputs:
+      pr-url: ${{ steps.publish.outputs.pr-url }}
+      pr-sha: ${{ steps.publish.outputs.pr-sha }}
+    steps:
+      - name: Checkout target at unchanged base
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ needs.prepare.outputs.base }}
+          path: target
+          persist-credentials: true
+      - name: Checkout immutable engine
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .ia-dev-engine
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: execution
+          path: target/bundle
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: review
+          path: target/bundle
+      - name: Publish verified proposal
+        id: publish
+        run: node "$IA_DEV_ENGINE/controller/github.mjs" publish
+        working-directory: target
+        env:
+          IA_DEV_ENGINE: ${{ github.workspace }}/.ia-dev-engine
+          IA_DEV_ENGINE_SHA: ${{ job.workflow_sha }}
+          IA_DEV_ISSUE_NUMBER: ${{ inputs.issue }}
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_DIGEST: ${{ needs.verify.outputs.digest }}
+          BASE_SHA: ${{ needs.prepare.outputs.base }}
+          ALLOWED_PATHS: ${{ toJSON(fromJSON(needs.prepare.outputs.target-config).allowed_paths) }}
+          PROTECTED_PATHS: ${{ toJSON(fromJSON(needs.prepare.outputs.target-config).protected_paths) }}
+          CONFIG_PATH: ${{ github.workspace }}/.ia-dev-engine/config/repositories.yml
+      - name: Upload publication evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: publication
+          path: target/bundle/publication.json
+          retention-days: 7
+
+  report-failure:
+    needs: [prepare, execute, verify, review, publish]
+    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.skip == 'false' && needs.publish.result != 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      issues: write
+      actions: write
+    steps:
+      - name: Checkout immutable engine
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .ia-dev-engine
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        continue-on-error: true
+        with:
+          pattern: '*'
+          merge-multiple: true
+          path: bundle
+      - name: Record bounded failure
+        id: failure
+        run: node .ia-dev-engine/controller/github.mjs failure
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IA_DEV_ISSUE_NUMBER: ${{ inputs.issue }}
+          CONFIG_PATH: ${{ github.workspace }}/.ia-dev-engine/config/repositories.yml
+      - name: Dispatch clean retry
+        if: steps.failure.outputs.retry == 'true'
+        run: node .ia-dev-engine/controller/github.mjs retry
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IA_DEV_ISSUE_NUMBER: ${{ inputs.issue }}
+          CONFIG_PATH: ${{ github.workspace }}/.ia-dev-engine/config/repositories.yml
+          RETRY: ${{ steps.failure.outputs.retry }}
+          CALLER_WORKFLOW: ${{ inputs.caller-workflow }}
