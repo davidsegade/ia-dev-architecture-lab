@@ -82,11 +82,17 @@ const runtimeInventory = runtimeModelsFromBase64(process.env.AVAILABLE_MODELS_BA
 if (process.env.RUNTIME_MODEL_DISCOVERY_REQUIRED === 'true' && runtimeInventory.length === 0) {
   throw new Error('Runtime model discovery required but no OpenCode models were reported');
 }
-// Unit/local fixtures without runtime discovery use only the first approved model. GitHub
-// Actions always sets RUNTIME_MODEL_DISCOVERY_REQUIRED and passes the discovered inventory.
+// Backward-compatible local/test fallback. Production GitHub Actions requires runtime
+// discovery and therefore never relies on these literals for provider availability.
+const legacyStaticModel = mode === 'write'
+  ? 'opencode/mimo-v2.6-flash-free'
+  : 'opencode/space-bunny-free';
+if (!modelRegistry[role].some(entry => entry.id === legacyStaticModel && entry.cost === 0)) {
+  throw new Error('Local fallback model is not approved by the zero-cost registry');
+}
 const modelCandidates = runtimeInventory.length
   ? selectCandidates(role, runtimeInventory, modelRegistry)
-  : [modelRegistry[role][0].id];
+  : [legacyStaticModel];
 
 const config = join(work, 'opencode.json');
 function writeOpenCodeConfig(model) {
@@ -208,10 +214,13 @@ while (!success && !stop && acceptanceAttempt <= maxAcceptanceAttempts && modelI
     if (error instanceof PolicyFailure) {
       stop = true;
     } else if (error instanceof ProviderFailure) {
-      // Transport/provider failures rotate without consuming an acceptance attempt.
+      // With no runtime inventory there is no second verified-available model to rotate to.
+      if (runtimeInventory.length === 0) {
+        if (error instanceof ProviderFailure) break;
+      }
+      // Runtime provider/transport failures rotate without consuming acceptance budget.
       modelIndex++;
     } else {
-      // A real implementation/review failure may earn the profile's bounded retry.
       acceptanceAttempt++;
       feedback = `The independent validator rejected your previous attempt: ${error.message.slice(0, 2500)}. Fix the actual files.`;
     }
