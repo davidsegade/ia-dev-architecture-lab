@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, basename } from 'node:path';
 
 const workflowsDir = join(process.cwd(), '.github', 'workflows');
 
@@ -17,7 +17,6 @@ function read(file) {
 
 /** Every `uses:` reference in the file, as raw strings. */
 function usesReferences(source) {
-  // Stop before the trailing "# tag" comment a pinned reference carries.
   return [...source.matchAll(/(?<![\w-])uses:[ \t]*([^\s#]+)/g)].map(match => match[1]);
 }
 
@@ -65,24 +64,46 @@ test('no workflow performs a merge', () => {
   }
 });
 
-test('only the publishing job holds write permissions', () => {
+test('write permissions stay outside author, verifier and reviewer execution', () => {
+  const engine = read(join(workflowsDir, 'ia-dev-engine.yml'));
+
+  // The reusable engine starts read-only. Only trusted publication and failure/retry
+  // reporting are allowed to request write scopes.
+  assert.match(engine, /^permissions:\n {2}contents: read/m);
+
+  for (const job of ['execute', 'verify', 'review']) {
+    const start = engine.indexOf(`  ${job}:`);
+    assert.ok(start >= 0, `missing ${job} job`);
+    const rest = engine.slice(start + 2);
+    const next = rest.search(/^ {2}[\w-]+:/m);
+    const block = next >= 0 ? rest.slice(0, next) : rest;
+    assert.doesNotMatch(block, /(contents|pull-requests|issues|statuses|actions): write/, `${job} must remain read-only`);
+  }
+
+  const publishStart = engine.indexOf('  publish:');
+  const failureStart = engine.indexOf('  report-failure:');
+  assert.ok(publishStart >= 0 && failureStart > publishStart, 'trusted write jobs must exist');
+  const publishBlock = engine.slice(publishStart, failureStart);
+  const failureBlock = engine.slice(failureStart);
+  assert.match(publishBlock, /contents: write/);
+  assert.match(publishBlock, /pull-requests: write/);
+  assert.match(publishBlock, /issues: write/);
+  assert.match(publishBlock, /statuses: write/);
+  assert.match(failureBlock, /issues: write/);
+  assert.match(failureBlock, /actions: write/);
+});
+
+test('a reusable-workflow caller may grant union permissions only as a code-free wrapper', () => {
   for (const file of workflowFiles()) {
     const source = read(file);
-    const writeScopes = ['contents: write', 'pull-requests: write', 'issues: write', 'statuses: write'];
-    const hasWrite = writeScopes.some(scope => source.includes(scope));
-    if (!hasWrite) continue;
-    // A workflow that declares write scopes must scope them to a single job, so the
-    // author and the reviewer jobs keep the read-only token.
-    const writeBlocks = source.match(/^ {4}permissions:$/gm) || [];
-    assert.ok(
-      writeBlocks.length > 0,
-      `${file} declares write permissions at workflow level; scope them to the publishing job`
-    );
-    assert.equal(
-      /^permissions:\n {2}(contents|pull-requests|issues|statuses): write/m.test(source),
-      false,
-      `${file} grants write permissions to every job`
-    );
+    const hasTopLevelWrite = /^permissions:\n(?: {2}[\w-]+: (?:read|write)\n)+/m.test(source) &&
+      /^permissions:\n(?:(?: {2}[\w-]+: (?:read|write)\n))* {2}(?:contents|pull-requests|issues|statuses|actions): write/m.test(source);
+    if (!hasTopLevelWrite) continue;
+
+    assert.equal(basename(file), 'laboratory.yml', `${file} unexpectedly grants workflow-level writes`);
+    assert.match(source, /uses: \.\/\.github\/workflows\/ia-dev-engine\.yml/);
+    assert.doesNotMatch(source, /^ {6}steps:/m, 'the write-capable wrapper must not execute arbitrary steps');
+    assert.doesNotMatch(source, /^ {6}runs-on:/m, 'the write-capable wrapper must delegate instead of running code');
   }
 });
 
@@ -94,8 +115,6 @@ test('the engine test suite is wired into CI', () => {
 });
 
 test('no workflow reads a GitHub token from the repository target', () => {
-  // The engine authenticates with the caller's GITHUB_TOKEN. A target repository must
-  // never be given a token of its own, and no PAT may be introduced.
   for (const file of workflowFiles()) {
     const source = read(file);
     assert.equal(
