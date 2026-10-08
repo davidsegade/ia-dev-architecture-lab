@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { boundedProcess, freeUsage } from './process.mjs';
 import { reviewVerdict } from './review.mjs';
-import { buildRankedContext } from './context.mjs';
+import { buildRankedContext, ensureGraphifyToolchain } from './context.mjs';
 import { mkdirSync, readFileSync, readdirSync, lstatSync, writeFileSync } from 'node:fs';
 import { resolve, join, relative } from 'node:path';
 import { taskCatalog } from './tasks.mjs';
@@ -129,7 +129,12 @@ const graphifyEnv = {
 };
 
 const binary = process.env.OPENCODE_BIN || 'opencode';
-const graphifyBinary = process.env.GRAPHIFY_BIN || 'graphify';
+const graphifyBinary = contextMode === 'ranked-context'
+  ? (process.env.GRAPHIFY_BIN || await ensureGraphifyToolchain({
+      directory: join(work, 'graphify-venv'),
+      env: graphifyEnv
+    }))
+  : null;
 const attempts = [];
 let verdict = null;
 let success = false;
