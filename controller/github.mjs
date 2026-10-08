@@ -78,7 +78,8 @@ if (mode === 'prepare') {
   const comments = await apiAll(`issues/${issueNumber}/comments`);
   const proposals = pulls.filter(pr => proposalBelongsToIssue(pr, issueNumber));
   const readyMarkers = comments.filter(comment => comment.user.type === 'Bot' && comment.body.includes('<!-- ia-dev:ready -->'));
-  const satisfiedMarkers = comments.filter(comment => comment.user.type === 'Bot' && comment.body.includes('<!-- ia-dev:already-satisfied -->'));
+  const satisfiedMarker = `<!-- ia-dev:already-satisfied:${requestDigest} -->`;
+  const satisfiedMarkers = comments.filter(comment => comment.user.type === 'Bot' && comment.body.includes(satisfiedMarker));
   const failed = comments.filter(comment => comment.user.type === 'Bot' && comment.body.includes('<!-- ia-dev:failed -->')).length;
   const { skip, reason } = decision({
     proposals: Math.max(proposals.length, readyMarkers.length, satisfiedMarkers.length),
@@ -147,11 +148,12 @@ if (mode === 'prepare') {
     throw new Error('Base changed after preflight');
   }
 
+  const marker = `<!-- ia-dev:already-satisfied:${requestDigest} -->`;
   const comments = await apiAll(`issues/${issueNumber}/comments`);
-  const existing = comments.some(comment => comment.user.type === 'Bot' && comment.body.includes('<!-- ia-dev:already-satisfied -->'));
+  const existing = comments.some(comment => comment.user.type === 'Bot' && comment.body.includes(marker));
   if (!existing) {
     await api(`issues/${issueNumber}/comments`, 'POST', {
-      body: `<!-- ia-dev:already-satisfied -->\nObjective acceptance already passes on base \`${base}\`. No model execution or proposal was required. Evidence: ${runUrl}`
+      body: `${marker}\nObjective acceptance already passes on base \`${base}\`. No model execution or proposal was required. Evidence: ${runUrl}`
     });
   }
   if (issue.state !== 'closed') {
