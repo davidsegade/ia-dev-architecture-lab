@@ -57,29 +57,26 @@ function goalFromIssue(body, maxGoalChars) {
 
 /**
  * Parses an owner request without letting issue prose define policy.
- *
- * Legacy requests keep the existing `task: <registered-task>` contract. Real development
- * uses `profile: code-change` plus `goal:` free text. The profile must be engine-owned and
- * repository-allowlisted; the goal is task intent only and never supplies paths, commands,
- * models, permissions or gates.
+ * Registered-task profiles select only engine-owned task specifications; goal profiles
+ * accept bounded free-form task intent but never permissions, paths, commands or models.
  */
 export function requestFromIssue(
   body,
   { taskCatalog: allowedCatalog = tasks, allowedProfiles = ['legacy-synthetic'] } = {}
 ) {
-  const selected = exactProfile(body);
-  if (!selected || selected === 'legacy-synthetic') {
-    profileFor('legacy-synthetic', allowedProfiles);
+  const selected = exactProfile(body) || 'legacy-synthetic';
+  const profile = profileFor(selected, allowedProfiles);
+
+  if (profile.kind === 'registered-task') {
     const task = taskFromIssue(body, Object.keys(allowedCatalog));
     return {
-      profile: 'legacy-synthetic',
+      profile: selected,
       task,
       specification: allowedCatalog[task]
     };
   }
 
-  const profile = profileFor(selected, allowedProfiles);
-  if (profile.kind !== 'goal') throw new Error(`Profile ${selected} does not accept free-form goals`);
+  if (profile.kind !== 'goal') throw new Error(`Profile ${selected} has unsupported request kind`);
   const specification = goalFromIssue(body, profile.maxGoalChars);
   return { profile: selected, task: 'goal', specification };
 }
