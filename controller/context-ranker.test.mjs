@@ -22,10 +22,12 @@ function graph() {
   };
 }
 
-test('ranker prioritizes symbols and tests related to the specification', () => {
+test('ranker prioritizes implementation and regression files related to the specification', () => {
   const result = rankGraph(graph(), 'Fix createRoutedGpx route creation and add regression tests');
-  assert.equal(result.selectedFiles[0], 'src/routes/create-route.ts');
-  assert.ok(result.selectedFiles.includes('tests/create-route.test.ts'));
+  const topTwo = result.selectedFiles.slice(0, 2);
+  assert.ok(topTwo.includes('src/routes/create-route.ts'));
+  assert.ok(topTwo.includes('tests/create-route.test.ts'));
+  assert.ok(result.selectedFiles.indexOf('src/auth/login.ts') > result.selectedFiles.indexOf('src/routes/create-route.ts'));
   assert.ok(result.selectedFiles.indexOf('src/auth/login.ts') > result.selectedFiles.indexOf('tests/create-route.test.ts'));
 });
 
