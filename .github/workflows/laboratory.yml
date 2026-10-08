@@ -1,4 +1,5 @@
 name: IA DEV laboratory
+
 on:
   issues:
     types: [opened]
@@ -13,213 +14,23 @@ on:
         required: false
         default: 'false'
         type: string
+
+# The caller grants the union of permissions the reusable workflow may need. Each job in
+# the called workflow narrows this token again; it can never gain access outside this repo.
 permissions:
-  contents: read
-env:
-  CONFIG_PATH: ${{ github.workspace }}/.ia-dev-engine/config/repositories.yml
-  IA_DEV_ENGINE_SHA: ${{ github.sha }}
-concurrency:
-  group: ia-dev-laboratory
-  cancel-in-progress: false
-  queue: max
+  contents: write
+  pull-requests: write
+  issues: write
+  statuses: write
+  actions: write
+
 jobs:
-  prepare:
-    if: (github.actor == github.repository_owner || (github.actor == 'github-actions[bot]' && github.event_name == 'workflow_dispatch' && inputs.automatic == 'true')) && (github.event_name == 'workflow_dispatch' || contains(github.event.issue.labels.*.name, 'ia-dev'))
-    runs-on: ubuntu-24.04
-    timeout-minutes: 3
-    outputs:
-      task: ${{ steps.prepare.outputs.task }}
-      issue: ${{ steps.prepare.outputs.issue }}
-      base: ${{ steps.prepare.outputs.base }}
-      skip: ${{ steps.prepare.outputs.skip }}
-      feedback: ${{ steps.prepare.outputs.feedback }}
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          ref: ${{ github.sha }}
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: '24'
-      - run: npm run test:architecture
-      - id: prepare
-        run: node controller/github.mjs prepare
-        env:
-          GH_TOKEN: ${{ github.token }}
-          CONFIG_PATH: ${{ github.workspace }}/config/repositories.yml
-  execute:
-    needs: prepare
-    if: needs.prepare.outputs.skip == 'false'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 9
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          ref: ${{ needs.prepare.outputs.base }}
-          persist-credentials: false
-      - name: Checkout trusted controller at workflow commit
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          ref: ${{ github.sha }}
-          path: .ia-dev-engine
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: '24'
-      - run: npm install --prefix "$RUNNER_TEMP/opencode" --no-audit --no-fund opencode-ai@1.18.35
-      - run: node .ia-dev-engine/controller/agent.mjs write "$TASK"
-        env:
-          TASK: ${{ needs.prepare.outputs.task }}
-          OPENCODE_BIN: ${{ runner.temp }}/opencode/node_modules/.bin/opencode
-          FEEDBACK_BASE64: ${{ needs.prepare.outputs.feedback }}
-      - if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: execution
-          path: bundle/
-          retention-days: 7
-  verify:
-    needs: [prepare, execute]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 3
-    outputs:
-      digest: ${{ steps.verify.outputs.digest }}
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          ref: ${{ needs.prepare.outputs.base }}
-          persist-credentials: false
-      - name: Checkout trusted controller at workflow commit
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          ref: ${{ github.sha }}
-          path: .ia-dev-engine
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: '24'
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          name: execution
-          path: bundle
-      - id: verify
-        run: |
-          node .ia-dev-engine/controller/gate.mjs "$TASK" bundle/change.patch > bundle/acceptance-result.json
-          node -e 'const fs=require("fs"); const r=JSON.parse(fs.readFileSync("bundle/acceptance-result.json")); fs.appendFileSync(process.env.GITHUB_OUTPUT,`digest=${r.digest}\n`);'
-        env:
-          TASK: ${{ needs.prepare.outputs.task }}
-      - if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: acceptance
-          path: bundle/acceptance-result.json
-          retention-days: 7
-  review:
-    needs: [prepare, execute, verify]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 6
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          ref: ${{ needs.prepare.outputs.base }}
-          persist-credentials: false
-      - name: Checkout trusted controller at workflow commit
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          ref: ${{ github.sha }}
-          path: .ia-dev-engine
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: '24'
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          name: execution
-          path: bundle
-      - run: node .ia-dev-engine/controller/gate.mjs "$TASK" bundle/change.patch
-        env:
-          TASK: ${{ needs.prepare.outputs.task }}
-      - run: npm install --prefix "$RUNNER_TEMP/opencode" --no-audit --no-fund opencode-ai@1.18.35
-      - run: node .ia-dev-engine/controller/agent.mjs review "$TASK"
-        env:
-          TASK: ${{ needs.prepare.outputs.task }}
-          OPENCODE_BIN: ${{ runner.temp }}/opencode/node_modules/.bin/opencode
-      - if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: review
-          path: bundle/review*
-          retention-days: 7
-  publish:
-    needs: [prepare, execute, verify, review]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 3
-    permissions:
-      contents: write
-      pull-requests: write
-      issues: write
-      statuses: write
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          ref: ${{ needs.prepare.outputs.base }}
-          persist-credentials: true
-      - name: Checkout trusted controller at workflow commit
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          ref: ${{ github.sha }}
-          path: .ia-dev-engine
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: '24'
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          name: execution
-          path: bundle
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          name: review
-          path: bundle
-      - run: node .ia-dev-engine/controller/github.mjs publish
-        env:
-          GH_TOKEN: ${{ github.token }}
-          EXPECTED_DIGEST: ${{ needs.verify.outputs.digest }}
-          BASE_SHA: ${{ needs.prepare.outputs.base }}
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: publication
-          path: bundle/publication.json
-          retention-days: 7
-  report-failure:
-    needs: [prepare, execute, verify, review, publish]
-    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.skip == 'false' && needs.publish.result != 'success'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 3
-    permissions:
-      contents: read
-      issues: write
-      actions: write
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          ref: ${{ needs.prepare.outputs.base }}
-          persist-credentials: false
-      - name: Checkout trusted controller at workflow commit
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          ref: ${{ github.sha }}
-          path: .ia-dev-engine
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: '24'
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        continue-on-error: true
-        with:
-          pattern: '*'
-          merge-multiple: true
-          path: bundle
-      - run: node .ia-dev-engine/controller/github.mjs failure
-        env:
-          GH_TOKEN: ${{ github.token }}
+  ia-dev:
+    if: >-
+      (github.actor == github.repository_owner ||
+      (github.actor == 'github-actions[bot]' && github.event_name == 'workflow_dispatch' && inputs.automatic == 'true')) &&
+      (github.event_name == 'workflow_dispatch' || contains(github.event.issue.labels.*.name, 'ia-dev'))
+    uses: ./.github/workflows/ia-dev-engine.yml
+    with:
+      issue: ${{ github.event_name == 'workflow_dispatch' && inputs.issue || format('{0}', github.event.issue.number) }}
+      caller-workflow: laboratory.yml
