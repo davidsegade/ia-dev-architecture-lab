@@ -119,8 +119,9 @@ if (mode === 'prepare') {
   // repository. Checking it against the engine's own synthetic tasks made publication
   // impossible for every repository that brings its own task.
   const review = JSON.parse(readFileSync('bundle/review-result.json', 'utf8'));
+  const author = JSON.parse(readFileSync('bundle/write-result.json', 'utf8'));
   const reviewed = taskFromIssue(issue.body || '', Object.keys(taskCatalog()));
-  if (!review.success || review.task !== reviewed) {
+  if (!author.success || author.task !== reviewed || !review.success || review.task !== reviewed || review.approved !== true || review.findings?.length !== 0 || author.model === review.model) {
     throw new Error('Independent review missing');
   }
   
@@ -150,8 +151,8 @@ if (mode === 'prepare') {
     title: `[IA DEV] ${issue.title}`,
     head: branch,
     base: 'main',
-    draft: false,
-    body: `IA DEV execution for issue #${issueNumber}.\n\nIndependent acceptance and review passed. Author: OpenCode Big Pickle. Reviewer: OpenCode Space Bunny Free.\n\nArtifact SHA-256: \`${digest}\`. Base: \`${current}\`. Checked head: \`${sha}\`.\n\nEvidence: ${runUrl}\n\nHuman approval required. No automatic merge.`
+    draft: true,
+    body: `IA DEV execution for issue #${issueNumber}.\n\nIndependent acceptance and review passed. Author: ${author.model}. Reviewer: ${review.model}.\n\nController: \`${process.env.IA_DEV_ENGINE_SHA || 'not recorded'}\`. Artifact SHA-256: \`${digest}\`. Base: \`${current}\`. Checked head: \`${sha}\`.\n\nEvidence: ${runUrl}\n\nHuman approval required. No automatic merge.`
   });
   
   await api(`issues/${issueNumber}/comments`, 'POST', {

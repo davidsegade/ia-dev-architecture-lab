@@ -16,5 +16,6 @@ export function freeUsage(raw) {
   if(events.some(event=>event.type==='error'))throw new Error('Provider reported an error');
   const finishes=events.filter(event=>event.type==='step_finish');
   if(!finishes.length || finishes.some(event=>event.part?.cost!==0))throw new Error('Free usage not confirmed');
-  return {cost:0,steps:finishes.length};
+  const sum=pick=>finishes.reduce((total,event)=>total+(pick(event.part.tokens||{})||0),0);
+  return {cost:0,steps:finishes.length,tokens:{input:sum(t=>t.input),output:sum(t=>t.output),reasoning:sum(t=>t.reasoning),cachedRead:sum(t=>t.cache?.read),cachedWrite:sum(t=>t.cache?.write)}};
 }

@@ -1,11 +1,11 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { lstatSync, readFileSync } from 'node:fs';
+import { lstatSync, readFileSync, realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { filesUnder } from './sync.mjs';
+import { filesUnder, matchesPath } from './sync.mjs';
 
-export function command(cmd, args, cwd, timeout = 15000) {
-  const result = spawnSync(cmd, args, { cwd, timeout, encoding: 'utf8', maxBuffer: 1024 * 1024 });
+export function command(cmd, args, cwd, timeout = 15000, env = process.env) {
+  const result = spawnSync(cmd, args, { cwd, timeout, env, encoding: 'utf8', maxBuffer: 1024 * 1024 });
   if (result.status !== 0) throw new Error(`${cmd} failed: ${result.error?.code || result.stderr || result.stdout}`);
   return result.stdout;
 }
@@ -25,13 +25,14 @@ export function getProtectedPaths() {
   return parsePathList(process.env.PROTECTED_PATHS, ['config/repositories.yml', '.github/**', 'controller/**', 'package.json']);
 }
 
-export function inspectPatch(patch, allowedPaths = getAllowedPaths()) {
+export function inspectPatch(patch, allowedPaths = getAllowedPaths(), protectedPaths = getProtectedPaths()) {
   if (!patch || Buffer.byteLength(patch) > 100000) throw new Error('Missing or oversized patch');
   const headers = [...patch.matchAll(/^diff --git a\/(\S+) b\/(\S+)$/gm)];
   if (!headers.length) throw new Error('No changes');
   for (const [, left, right] of headers) {
     if (left !== right) throw new Error('Renames forbidden');
-    const allowed = allowedPaths.some(p => new RegExp('^' + p.replace(/\*/g, '.*') + '$').test(right));
+    const allowed = allowedPaths.some(pattern => matchesPath(right, pattern));
+    if (protectedPaths.some(pattern => matchesPath(right, pattern))) throw new Error(`Protected path: ${right}`);
     if (!allowed) throw new Error(`Unauthorized path: ${right}`);
   }
   if (/^(?:new file mode|deleted file mode|old mode|new mode|rename |copy |GIT binary patch)/m.test(patch)) {
@@ -71,9 +72,12 @@ export function verify(root, task, candidate, allowedPaths = getAllowedPaths(), 
   }
 
   if (ENGINE_SELF_TASKS.includes(task)) {
-    command(process.execPath, ['--check', resolve(candidate, 'src/main.mjs')], root);
-    command(process.execPath, ['--test', resolve(candidate, 'tests/main.test.mjs')], root);
-    const acceptance = command(process.execPath, [resolve(root, 'acceptance/check.mjs'), task, candidate], root, 5000);
+    const directory=realpathSync(candidate);
+    const env={PATH:process.env.PATH,LANG:'en_US.UTF-8'};
+    const permissions=['--permission',`--allow-fs-read=${directory}`];
+    command(process.execPath, [...permissions,'--check',resolve(directory,'src/main.mjs')],root,15000,env);
+    command(process.execPath, [...permissions,'--test','--test-isolation=none','tests/main.test.mjs'],directory,15000,env);
+    const acceptance = command(process.execPath, [resolve(import.meta.dirname, '../acceptance/check.mjs'), task, directory], root, 5000,env);
     return JSON.parse(acceptance.trim());
   }
 

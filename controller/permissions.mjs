@@ -10,15 +10,25 @@
  */
 
 /** Edit permissions for the allowlisted paths, everything else denied. */
-export function editPermissions(allowedPaths) {
+export function editPermissions(allowedPaths, editPrefix = '') {
   const permissions = { '*': 'deny' };
   for (const path of allowedPaths) {
-    // A policy glob such as `lib/**` is anchored anywhere in the tree, so it becomes
-    // `**/lib/**`. Runs of three or more stars collapse first: `lib/**` describes one
-    // recursive wildcard, and rewriting every star separately would yield `lib/****`.
-    permissions[`**/${path.replace(/\*{3,}/g, '**')}`] = 'allow';
+    const name=normalizePattern(path);
+    permissions[editPrefix ? `${editPrefix}/${name}` : name] = 'allow';
   }
   return permissions;
+}
+
+/**
+ * Normalize a policy path without removing dots from hidden directory names.
+ * OpenCode edit/write permissions are relative to its Git worktree, so the agent
+ * supplies the exact candidate prefix rather than granting edits anywhere in the tree.
+ *
+ * Runs of three or more stars still collapse: `lib/**` describes one recursive wildcard,
+ * and rewriting every star separately would yield `lib/****`.
+ */
+function normalizePattern(pattern) {
+  return String(pattern).replace(/^\.\//, '').replace(/^\/+/, '').replace(/\*{3,}/g, '**');
 }
 
 /**
@@ -44,7 +54,7 @@ export function bashPermissions(acceptanceCommand, buildCommand) {
  * Full permission block for an agent run.
  * The reviewer gets no write surface at all: no edits, no bash.
  */
-export function permissionsFor(mode, { allowedPaths = [], acceptanceCommand, buildCommand } = {}) {
+export function permissionsFor(mode, { allowedPaths = [], acceptanceCommand, buildCommand, editPrefix = '' } = {}) {
   if (mode !== 'write') {
     return {
       '*': 'deny',
@@ -62,7 +72,7 @@ export function permissionsFor(mode, { allowedPaths = [], acceptanceCommand, bui
     glob: 'allow',
     grep: 'allow',
     external_directory: 'deny',
-    edit: editPermissions(allowedPaths),
+    edit: editPermissions(allowedPaths, editPrefix),
     bash: bashPermissions(acceptanceCommand, buildCommand)
   };
 }

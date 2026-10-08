@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { loadConfig, policyFor, tasksForPolicy } from './config.mjs';
 
@@ -97,4 +98,65 @@ test('policy never leaks between repositories', () => {
   assert.equal(repositories['acme/api'].allowed_paths.length, 2);
   assert.equal(repositories['acme/legacy-app'].allowed_paths.length, 1);
   assert.equal(repositories['acme/legacy-app'].build_command, 'make');
+});
+
+const REAL_CONFIG = join(
+  fileURLToPath(new URL('..', import.meta.url)),
+  'config/repositories.yml'
+);
+
+function realPolicy() {
+  process.env.CONFIG_PATH = REAL_CONFIG;
+  try {
+    return loadConfig();
+  } finally {
+    delete process.env.CONFIG_PATH;
+  }
+}
+
+test('the architecture lab policy is allowlisted with its real paths and commands', () => {
+  const lab = policyFor('davidsegade/ia-dev-architecture-lab', realPolicy());
+  assert.deepEqual(lab.allowed_paths, ['src/main.mjs', 'tests/main.test.mjs']);
+  assert.deepEqual(lab.protected_paths, [
+    '.github/**',
+    'controller/**',
+    'acceptance/**',
+    'config/**',
+    'package.json'
+  ]);
+  assert.equal(lab.acceptance_command, 'npm test');
+  assert.equal(lab.build_command, 'npm run build');
+  assert.equal(lab.workspace_root, '.');
+});
+
+test('the architecture lab policy registers exactly the engine task keys', () => {
+  const lab = policyFor('davidsegade/ia-dev-architecture-lab', realPolicy());
+  assert.deepEqual(Object.keys(tasksForPolicy(lab)), ['clamp', 'chunk', 'sumCents']);
+});
+
+test('lab task descriptions match the engine catalog verbatim', async () => {
+  const { tasks } = await import('./tasks.mjs');
+  const lab = policyFor('davidsegade/ia-dev-architecture-lab', realPolicy());
+  assert.deepEqual(tasksForPolicy(lab), tasks);
+});
+
+test('the existing TURNEO policy survives alongside the lab policy', () => {
+  const repositories = realPolicy();
+  assert.ok(repositories['davidsegade/TURNEO-Flutter'], 'TURNEO-Flutter must remain allowlisted');
+  const turneo = repositories['davidsegade/TURNEO-Flutter'];
+  assert.deepEqual(turneo.allowed_paths, ['lib/**', 'test/**']);
+  assert.deepEqual(turneo.protected_paths, [
+    '.github/**',
+    'pubspec.yaml',
+    'pubspec.lock',
+    'analysis_options.yaml',
+    '.metadata'
+  ]);
+  assert.deepEqual(tasksForPolicy(turneo), {
+    'add-dummy-test':
+      'Add a simple dummy test to test/widget_test.dart that always passes. Do not modify any production code. Preserve existing tests.'
+  });
+  assert.equal(turneo.acceptance_command, 'flutter test');
+  assert.equal(turneo.build_command, 'flutter analyze && flutter test');
+  assert.equal(turneo.workspace_root, '.');
 });
