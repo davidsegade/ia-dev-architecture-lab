@@ -44,11 +44,12 @@ test('Graphify environment contains no GitHub or model credential variables', ()
   assert.match(block, /DO_NOT_TRACK/);
 });
 
-test('ranked context is enabled only by engine-owned profile context mode', () => {
+test('ranked context is enabled only by engine-owned role-aware profile context mode', () => {
   const source = agentSource();
-  assert.match(source, /const contextMode = profile\.contextMode/);
-  assert.match(source, /\['legacy', 'ranked-context'\]\.includes\(contextMode\)/);
+  assert.match(source, /contextModeForRole\(profile, mode\)/);
+  assert.match(source, /\['legacy', 'ranked-context', 'review-diff'\]\.includes\(contextMode\)/);
   assert.match(source, /contextMode === 'ranked-context'/);
+  assert.match(source, /contextMode === 'review-diff'/);
 });
 
 test('temporary Graphify bootstrap workflow is absent from final architecture', () => {
