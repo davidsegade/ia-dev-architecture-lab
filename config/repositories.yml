@@ -1,6 +1,13 @@
 repositories:
   davidsegade/TURNEO-Flutter:
+    # Legacy alias retained while callers migrate to the explicit read/write policy.
     allowed_paths:
+      - "lib/**"
+      - "test/**"
+    context_paths:
+      - "lib/**"
+      - "test/**"
+    write_paths:
       - "lib/**"
       - "test/**"
     protected_paths:
@@ -9,13 +16,25 @@ repositories:
       - "pubspec.lock"
       - "analysis_options.yaml"
       - ".metadata"
+    sensitive_paths:
+      - ".env"
+      - ".env.*"
     tasks:
       - add-dummy-test: "Add a simple dummy test to test/widget_test.dart that always passes. Do not modify any production code. Preserve existing tests."
     acceptance_command: "flutter test"
     build_command: "flutter analyze && flutter test"
     workspace_root: "."
   davidsegade/ia-dev-architecture-lab:
+    # Legacy alias retained for IA DEV 2.0 compatibility. IA DEV 2.1 reads context_paths
+    # and grants edits only to write_paths.
     allowed_paths:
+      - "src/main.mjs"
+      - "tests/main.test.mjs"
+    context_paths:
+      - "src/**"
+      - "tests/**"
+      - "package.json"
+    write_paths:
       - "src/main.mjs"
       - "tests/main.test.mjs"
     protected_paths:
@@ -24,6 +43,9 @@ repositories:
       - "acceptance/**"
       - "config/**"
       - "package.json"
+    sensitive_paths:
+      - ".env"
+      - ".env.*"
     tasks:
       - clamp: "Implement clamp(value, minimum, maximum). All three arguments must be finite numbers or throw TypeError. If minimum > maximum throw RangeError. Return value bounded inclusively to minimum and maximum. Add tests while preserving baseline tests."
       - chunk: "Implement chunk(values, size). Require an array and a positive safe integer size; throw TypeError for a non-array, RangeError for invalid size. Return consecutive arrays of at most size elements; an empty array returns []. Do not mutate input. Add tests while preserving baseline tests."
