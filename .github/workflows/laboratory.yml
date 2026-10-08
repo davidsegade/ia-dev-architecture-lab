@@ -15,6 +15,9 @@ on:
         type: string
 permissions:
   contents: read
+env:
+  CONFIG_PATH: ${{ github.workspace }}/.ia-dev-engine/config/repositories.yml
+  IA_DEV_ENGINE_SHA: ${{ github.sha }}
 concurrency:
   group: ia-dev-laboratory
   cancel-in-progress: false
@@ -33,7 +36,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: main
+          ref: ${{ github.sha }}
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
@@ -43,6 +46,7 @@ jobs:
         run: node controller/github.mjs prepare
         env:
           GH_TOKEN: ${{ github.token }}
+          CONFIG_PATH: ${{ github.workspace }}/config/repositories.yml
   execute:
     needs: prepare
     if: needs.prepare.outputs.skip == 'false'
@@ -53,11 +57,17 @@ jobs:
         with:
           ref: ${{ needs.prepare.outputs.base }}
           persist-credentials: false
+      - name: Checkout trusted controller at workflow commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          path: .ia-dev-engine
+          persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '24'
-      - run: npm install --prefix "$RUNNER_TEMP/opencode" --no-audit --no-fund opencode-ai@1.18.34
-      - run: node controller/agent.mjs write "$TASK"
+      - run: npm install --prefix "$RUNNER_TEMP/opencode" --no-audit --no-fund opencode-ai@1.18.35
+      - run: node .ia-dev-engine/controller/agent.mjs write "$TASK"
         env:
           TASK: ${{ needs.prepare.outputs.task }}
           OPENCODE_BIN: ${{ runner.temp }}/opencode/node_modules/.bin/opencode
@@ -79,6 +89,12 @@ jobs:
         with:
           ref: ${{ needs.prepare.outputs.base }}
           persist-credentials: false
+      - name: Checkout trusted controller at workflow commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          path: .ia-dev-engine
+          persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '24'
@@ -88,7 +104,7 @@ jobs:
           path: bundle
       - id: verify
         run: |
-          node controller/gate.mjs "$TASK" bundle/change.patch > bundle/acceptance-result.json
+          node .ia-dev-engine/controller/gate.mjs "$TASK" bundle/change.patch > bundle/acceptance-result.json
           node -e 'const fs=require("fs"); const r=JSON.parse(fs.readFileSync("bundle/acceptance-result.json")); fs.appendFileSync(process.env.GITHUB_OUTPUT,`digest=${r.digest}\n`);'
         env:
           TASK: ${{ needs.prepare.outputs.task }}
@@ -107,6 +123,12 @@ jobs:
         with:
           ref: ${{ needs.prepare.outputs.base }}
           persist-credentials: false
+      - name: Checkout trusted controller at workflow commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          path: .ia-dev-engine
+          persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '24'
@@ -114,11 +136,11 @@ jobs:
         with:
           name: execution
           path: bundle
-      - run: node controller/gate.mjs "$TASK" bundle/change.patch
+      - run: node .ia-dev-engine/controller/gate.mjs "$TASK" bundle/change.patch
         env:
           TASK: ${{ needs.prepare.outputs.task }}
-      - run: npm install --prefix "$RUNNER_TEMP/opencode" --no-audit --no-fund opencode-ai@1.18.34
-      - run: node controller/agent.mjs review "$TASK"
+      - run: npm install --prefix "$RUNNER_TEMP/opencode" --no-audit --no-fund opencode-ai@1.18.35
+      - run: node .ia-dev-engine/controller/agent.mjs review "$TASK"
         env:
           TASK: ${{ needs.prepare.outputs.task }}
           OPENCODE_BIN: ${{ runner.temp }}/opencode/node_modules/.bin/opencode
@@ -142,6 +164,12 @@ jobs:
         with:
           ref: ${{ needs.prepare.outputs.base }}
           persist-credentials: true
+      - name: Checkout trusted controller at workflow commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          path: .ia-dev-engine
+          persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '24'
@@ -153,7 +181,7 @@ jobs:
         with:
           name: review
           path: bundle
-      - run: node controller/github.mjs publish
+      - run: node .ia-dev-engine/controller/github.mjs publish
         env:
           GH_TOKEN: ${{ github.token }}
           EXPECTED_DIGEST: ${{ needs.verify.outputs.digest }}
@@ -177,6 +205,12 @@ jobs:
         with:
           ref: ${{ needs.prepare.outputs.base }}
           persist-credentials: false
+      - name: Checkout trusted controller at workflow commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          path: .ia-dev-engine
+          persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '24'
@@ -186,6 +220,6 @@ jobs:
           pattern: '*'
           merge-multiple: true
           path: bundle
-      - run: node controller/github.mjs failure
+      - run: node .ia-dev-engine/controller/github.mjs failure
         env:
           GH_TOKEN: ${{ github.token }}

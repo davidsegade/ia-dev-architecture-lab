@@ -13,12 +13,25 @@
 export function editPermissions(allowedPaths) {
   const permissions = { '*': 'deny' };
   for (const path of allowedPaths) {
-    // A policy glob such as `lib/**` is anchored anywhere in the tree, so it becomes
-    // `**/lib/**`. Runs of three or more stars collapse first: `lib/**` describes one
-    // recursive wildcard, and rewriting every star separately would yield `lib/****`.
-    permissions[`**/${path.replace(/\*{3,}/g, '**')}`] = 'allow';
+    permissions[normalizePattern(path)] = 'allow';
   }
   return permissions;
+}
+
+/**
+ * A policy path as OpenCode matches it: relative to the workspace root.
+ *
+ * OpenCode compares an edit permission against the path it is about to write, which is
+ * root relative in the sandbox. Prefixing the policy path with a recursive directory glob
+ * in the tree therefore stopped `lib/**` from matching the root relative `lib/x.mjs` the
+ * agent was instructed to write: the allowlisted edits were denied while the run still
+ * looked healthy, because a denied edit is not a failure the run can report.
+ *
+ * Runs of three or more stars still collapse: `lib/**` describes one recursive wildcard,
+ * and rewriting every star separately would yield `lib/****`.
+ */
+function normalizePattern(pattern) {
+  return String(pattern).replace(/^\.\//, '').replace(/^\/+/, '').replace(/\*{3,}/g, '**');
 }
 
 /**

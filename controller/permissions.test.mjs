@@ -51,19 +51,41 @@ test('bash permissions ignore empty segments of a compound command', () => {
   assert.equal(permissions[''], undefined);
 });
 
-test('edit permissions anchor policy globs without degenerating them', () => {
+test('edit permissions use the policy glob as written, root relative', () => {
   assert.deepEqual(editPermissions(['lib/**', 'test/**']), {
     '*': 'deny',
-    '**/lib/**': 'allow',
-    '**/test/**': 'allow'
+    'lib/**': 'allow',
+    'test/**': 'allow'
   });
 });
 
-test('edit permissions keep a literal file path anchored', () => {
+test('edit permissions keep a literal file path root relative', () => {
   assert.deepEqual(editPermissions(['src/main.mjs']), {
     '*': 'deny',
-    '**/src/main.mjs': 'allow'
+    'src/main.mjs': 'allow'
   });
+});
+
+test('edit permissions never prefix the policy path with **/', () => {
+  // The regression: `**/lib/**` does not match the root relative `lib/x.mjs` OpenCode is
+  // about to write, so every allowlisted edit was denied without the run ever failing.
+  const permissions = editPermissions(['lib/**', 'src/main.mjs']);
+  assert.deepEqual(
+    Object.keys(permissions).filter(key => key.includes('**/')),
+    []
+  );
+});
+
+test('edit permissions normalise a redundant prefix and collapse star runs', () => {
+  assert.deepEqual(editPermissions(['./lib/**', 'lib/****', '/src/main.mjs']), {
+    '*': 'deny',
+    'lib/**': 'allow',
+    'src/main.mjs': 'allow'
+  });
+});
+test('hidden directory names keep their leading dot',()=>{
+  assert.equal(editPermissions(['.config/**'])['.config/**'],'allow');
+  assert.equal(editPermissions(['.config/**'])['config/**'],undefined);
 });
 
 test('the executor sandbox allows only allowlisted edits and policy commands', () => {
