@@ -1,12 +1,21 @@
 export const profiles = Object.freeze({
   'legacy-synthetic': Object.freeze({
     kind: 'registered-task',
+    contextMode: 'legacy',
+    authorAttempts: 2,
+    reviewerAttempts: 1,
+    maxGoalChars: 0
+  }),
+  'ranked-synthetic': Object.freeze({
+    kind: 'registered-task',
+    contextMode: 'ranked-context',
     authorAttempts: 2,
     reviewerAttempts: 1,
     maxGoalChars: 0
   }),
   'code-change': Object.freeze({
     kind: 'goal',
+    contextMode: 'ranked-context',
     authorAttempts: 2,
     reviewerAttempts: 1,
     maxGoalChars: 4000
