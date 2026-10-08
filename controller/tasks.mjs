@@ -1,4 +1,6 @@
+import { createHash } from 'node:crypto';
 import { loadConfig, tasksForPolicy } from './config.mjs';
+import { profileFor } from './profiles.mjs';
 
 export const tasks = Object.freeze({
   clamp: 'Implement clamp(value, minimum, maximum). All three arguments must be finite numbers or throw TypeError. If minimum > maximum throw RangeError. Return value bounded inclusively to minimum and maximum. Add tests while preserving baseline tests.',
@@ -6,11 +8,6 @@ export const tasks = Object.freeze({
   sumCents: 'Implement sumCents(values). Require an array of safe integer numbers (negative values allowed); invalid elements or non-array throw TypeError. Every intermediate sum must remain a safe integer or throw RangeError. Return the exact sum, 0 for empty. Add tests while preserving baseline tests.'
 });
 
-/**
- * Task catalog: the engine's built-in synthetic tasks merged with the tasks
- * registered for the current target repository in the engine-owned policy file.
- * A target repository can never invent a task; only the engine can register one.
- */
 export function taskCatalog() {
   const registered = {};
   try {
@@ -18,18 +15,11 @@ export function taskCatalog() {
     const policy = targetRepo ? loadConfig()[targetRepo] : undefined;
     if (policy) Object.assign(registered, tasksForPolicy(policy));
   } catch {
-    // Policy unavailable: fall back to the built-in catalog only.
+    // Policy unavailable: fall back to built-in synthetic tasks only.
   }
   return { ...tasks, ...registered };
 }
 
-/**
- * Reads the synthetic task from an issue body.
- *
- * The marker must be a line of its own: `task: <name>`. Anything else is rejected
- * rather than guessed, because a task name selects the specification the agent and
- * the reviewer are held to, and a misread marker would silently change the contract.
- */
 export function taskFromIssue(body, allowedTasks = Object.keys(tasks)) {
   const match = /^task: (\S+)\s*$/m.exec(body);
   if (!match) {
@@ -44,4 +34,56 @@ export function taskFromIssue(body, allowedTasks = Object.keys(tasks)) {
     throw new Error(`Task ${task} not in allowlist. Known tasks: ${allowedTasks.join(', ')}`);
   }
   return task;
+}
+
+function exactProfile(body) {
+  const matches = [...String(body).matchAll(/^profile: ([A-Za-z0-9-]+)\s*$/gm)];
+  if (matches.length > 1) throw new Error('Exactly one profile marker is allowed');
+  return matches[0]?.[1] || null;
+}
+
+function goalFromIssue(body, maxGoalChars) {
+  const source = String(body);
+  const match = /^goal:\s*(.*)$/m.exec(source);
+  if (!match) throw new Error('code-change requires a goal: marker');
+  const lineEnd = source.indexOf('\n', match.index);
+  const first = match[1].trim();
+  const rest = lineEnd === -1 ? '' : source.slice(lineEnd + 1).trim();
+  const goal = [first, rest].filter(Boolean).join('\n').trim();
+  if (!goal) throw new Error('code-change goal cannot be empty');
+  if (goal.length > maxGoalChars) throw new Error(`code-change goal exceeds ${maxGoalChars} characters`);
+  return goal;
+}
+
+/**
+ * Parses an owner request without letting issue prose define policy.
+ *
+ * Legacy requests keep the existing `task: <registered-task>` contract. Real development
+ * uses `profile: code-change` plus `goal:` free text. The profile must be engine-owned and
+ * repository-allowlisted; the goal is task intent only and never supplies paths, commands,
+ * models, permissions or gates.
+ */
+export function requestFromIssue(
+  body,
+  { taskCatalog: allowedCatalog = tasks, allowedProfiles = ['legacy-synthetic'] } = {}
+) {
+  const selected = exactProfile(body);
+  if (!selected || selected === 'legacy-synthetic') {
+    profileFor('legacy-synthetic', allowedProfiles);
+    const task = taskFromIssue(body, Object.keys(allowedCatalog));
+    return {
+      profile: 'legacy-synthetic',
+      task,
+      specification: allowedCatalog[task]
+    };
+  }
+
+  const profile = profileFor(selected, allowedProfiles);
+  if (profile.kind !== 'goal') throw new Error(`Profile ${selected} does not accept free-form goals`);
+  const specification = goalFromIssue(body, profile.maxGoalChars);
+  return { profile: selected, task: 'goal', specification };
+}
+
+export function specificationDigest(specification) {
+  return createHash('sha256').update(String(specification)).digest('hex');
 }
