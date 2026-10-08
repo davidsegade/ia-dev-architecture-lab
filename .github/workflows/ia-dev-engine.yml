@@ -36,6 +36,7 @@ jobs:
       task: ${{ steps.prepare.outputs.task }}
       profile: ${{ steps.prepare.outputs.profile }}
       specification: ${{ steps.prepare.outputs.specification }}
+      request-digest: ${{ steps.prepare.outputs.request-digest }}
       issue: ${{ steps.prepare.outputs.issue }}
       base: ${{ steps.prepare.outputs.base }}
       skip: ${{ steps.prepare.outputs.skip }}
@@ -69,6 +70,8 @@ jobs:
     if: needs.prepare.outputs.skip == 'false'
     runs-on: ubuntu-24.04
     timeout-minutes: 9
+    outputs:
+      already-satisfied: ${{ steps.preflight.outputs.already-satisfied }}
     steps:
       - name: Checkout target at verified base
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -87,14 +90,31 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '24'
+      - name: Preflight objective synthetic acceptance
+        id: preflight
+        run: node "$IA_DEV_ENGINE/controller/preflight.mjs" "$TASK"
+        working-directory: target
+        env:
+          IA_DEV_ENGINE: ${{ github.workspace }}/.ia-dev-engine
+          IA_DEV_ENGINE_REPOSITORY: ${{ job.workflow_repository }}
+          TARGET_REPO: ${{ github.repository }}
+          TASK: ${{ needs.prepare.outputs.task }}
+          REQUEST_PROFILE: ${{ needs.prepare.outputs.profile }}
+          WRITE_PATHS: ${{ toJSON(fromJSON(needs.prepare.outputs.target-config).write_paths) }}
+          ALLOWED_PATHS: ${{ toJSON(fromJSON(needs.prepare.outputs.target-config).write_paths) }}
+          ACCEPTANCE_COMMAND: ${{ fromJSON(needs.prepare.outputs.target-config).acceptance_command }}
+          BUILD_COMMAND: ${{ fromJSON(needs.prepare.outputs.target-config).build_command }}
+          WORKSPACE_ROOT: ${{ fromJSON(needs.prepare.outputs.target-config).workspace_root }}
       - name: Install locked target dependencies
-        if: hashFiles('target/package-lock.json') != ''
+        if: steps.preflight.outputs.already-satisfied != 'true' && hashFiles('target/package-lock.json') != ''
         run: npm ci --no-audit --no-fund
         working-directory: target
       - name: Install locked OpenCode toolchain
+        if: steps.preflight.outputs.already-satisfied != 'true'
         run: npm ci --no-audit --no-fund
         working-directory: .ia-dev-engine/toolchain
       - name: Discover runtime OpenCode models
+        if: steps.preflight.outputs.already-satisfied != 'true'
         id: models
         run: node "$IA_DEV_ENGINE/controller/discover-models.mjs"
         working-directory: target
@@ -102,6 +122,7 @@ jobs:
           IA_DEV_ENGINE: ${{ github.workspace }}/.ia-dev-engine
           OPENCODE_BIN: ${{ github.workspace }}/.ia-dev-engine/toolchain/node_modules/.bin/opencode
       - name: Execute scoped author
+        if: steps.preflight.outputs.already-satisfied != 'true'
         run: node "$IA_DEV_ENGINE/controller/agent.mjs" write "$TASK"
         working-directory: target
         env:
@@ -123,15 +144,46 @@ jobs:
           WORKSPACE_ROOT: ${{ fromJSON(needs.prepare.outputs.target-config).workspace_root }}
           CONFIG_PATH: ${{ github.workspace }}/.ia-dev-engine/config/repositories.yml
       - name: Upload execution evidence
-        if: always()
+        if: always() && steps.preflight.outputs.already-satisfied != 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: execution
           path: target/bundle/
           retention-days: 7
 
+  complete-already-satisfied:
+    needs: [prepare, execute]
+    if: needs.prepare.outputs.skip == 'false' && needs.execute.outputs.already-satisfied == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout immutable engine
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .ia-dev-engine
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Record already-satisfied result
+        run: node .ia-dev-engine/controller/github.mjs already-satisfied
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IA_DEV_ISSUE_NUMBER: ${{ inputs.issue }}
+          TASK: ${{ needs.prepare.outputs.task }}
+          REQUEST_PROFILE: ${{ needs.prepare.outputs.profile }}
+          EXPECTED_REQUEST_DIGEST: ${{ needs.prepare.outputs.request-digest }}
+          BASE_SHA: ${{ needs.prepare.outputs.base }}
+          CONFIG_PATH: ${{ github.workspace }}/.ia-dev-engine/config/repositories.yml
+
   verify:
     needs: [prepare, execute]
+    if: needs.prepare.outputs.skip == 'false' && needs.execute.outputs.already-satisfied != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 6
     outputs:
@@ -327,7 +379,7 @@ jobs:
 
   report-failure:
     needs: [prepare, execute, verify, review, publish]
-    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.skip == 'false' && needs.publish.result != 'success'
+    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.skip == 'false' && needs.execute.outputs.already-satisfied != 'true' && needs.publish.result != 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 3
     permissions:

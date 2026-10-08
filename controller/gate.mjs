@@ -17,22 +17,18 @@ export function parsePathList(raw, fallback) {
   return trimmed.split(',').map(entry => entry.trim()).filter(Boolean);
 }
 
-/** Explicit IA DEV 2.1 write surface, with IA DEV 2.0 ALLOWED_PATHS fallback. */
 export function getWritePaths() {
   return parsePathList(process.env.WRITE_PATHS || process.env.ALLOWED_PATHS, ['src/main.mjs', 'tests/main.test.mjs']);
 }
 
-/** Read/context surface. It may be broader than write paths, never narrower by accident. */
 export function getContextPaths() {
   return parsePathList(process.env.CONTEXT_PATHS, getWritePaths());
 }
 
-/** Files matching these globs must never enter an agent/context-builder sandbox. */
 export function getSensitivePaths() {
   return parsePathList(process.env.SENSITIVE_PATHS, []);
 }
 
-/** Backward-compatible alias used by IA DEV 2.0 tests and publication code. */
 export function getAllowedPaths() {
   return getWritePaths();
 }
@@ -57,19 +53,12 @@ export function inspectPatch(patch, writePaths = getWritePaths(), protectedPaths
   return createHash('sha256').update(patch).digest('hex');
 }
 
-/**
- * The engine's own synthetic tasks ship with an objective checker that goes beyond the
- * repository test suite. Every other repository brings its own acceptance command in
- * the engine policy file, so its commands are what decides.
- */
-const ENGINE_SELF_TASKS = ['clamp', 'chunk', 'sumCents'];
+const ENGINE_SELF_TASKS = Object.freeze(['clamp', 'chunk', 'sumCents']);
 
-/**
- * Independent acceptance of a change.
- *
- * `candidate` is the filtered sandbox the agent edited. Only write paths are validated
- * as publication candidates; broader context files are read-only evidence.
- */
+export function isEngineSelfTask(task) {
+  return ENGINE_SELF_TASKS.includes(task);
+}
+
 export function verify(root, task, candidate, writePaths = getWritePaths(), acceptanceCommand = 'npm test', buildCommand = 'npm run build') {
   for (const name of filesUnder(candidate, writePaths)) {
     const fullPath = resolve(candidate, name);
@@ -84,7 +73,7 @@ export function verify(root, task, candidate, writePaths = getWritePaths(), acce
     }
   }
 
-  if (ENGINE_SELF_TASKS.includes(task)) {
+  if (isEngineSelfTask(task)) {
     const directory=realpathSync(candidate);
     const env={PATH:process.env.PATH,LANG:'en_US.UTF-8'};
     const permissions=['--permission',`--allow-fs-read=${directory}`];

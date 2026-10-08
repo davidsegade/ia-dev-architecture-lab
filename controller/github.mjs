@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync, appendFileSync } from 'node:fs';
-import { command, inspectPatch, getAllowedPaths } from './gate.mjs';
+import { command, inspectPatch, getAllowedPaths, isEngineSelfTask } from './gate.mjs';
 import { requestFromIssue, specificationDigest } from './tasks.mjs';
+import { profileFor } from './profiles.mjs';
 import { loadConfig, tasksForPolicy } from './config.mjs';
 import { decision, shouldRetry, proposalBranch, proposalBelongsToIssue } from './lifecycle.mjs';
 import { createGitHubApi } from './github-api.mjs';
@@ -71,14 +72,17 @@ const [mode] = process.argv.slice(2);
 
 if (mode === 'prepare') {
   const request = parseRequest();
+  const requestDigest = specificationDigest(request.specification);
 
   const pulls = await apiAll('pulls?state=all');
   const comments = await apiAll(`issues/${issueNumber}/comments`);
   const proposals = pulls.filter(pr => proposalBelongsToIssue(pr, issueNumber));
   const readyMarkers = comments.filter(comment => comment.user.type === 'Bot' && comment.body.includes('<!-- ia-dev:ready -->'));
+  const satisfiedMarker = `<!-- ia-dev:already-satisfied:${requestDigest} -->`;
+  const satisfiedMarkers = comments.filter(comment => comment.user.type === 'Bot' && comment.body.includes(satisfiedMarker));
   const failed = comments.filter(comment => comment.user.type === 'Bot' && comment.body.includes('<!-- ia-dev:failed -->')).length;
   const { skip, reason } = decision({
-    proposals: Math.max(proposals.length, readyMarkers.length),
+    proposals: Math.max(proposals.length, readyMarkers.length, satisfiedMarkers.length),
     failures: failed,
     state: issue.state,
     commentCount: comments.length
@@ -99,6 +103,7 @@ if (mode === 'prepare') {
     task: request.task,
     profile: request.profile,
     specification: Buffer.from(request.specification, 'utf8').toString('base64'),
+    'request-digest': requestDigest,
     issue: issueNumber,
     base,
     skip: String(skip),
@@ -118,6 +123,43 @@ if (mode === 'prepare') {
 
   publish(output);
   console.log(JSON.stringify({ ...output, specification: '[base64]', failed, reason }));
+
+} else if (mode === 'already-satisfied') {
+  const reviewed = parseRequest();
+  const requestDigest = specificationDigest(reviewed.specification);
+  const profile = profileFor(reviewed.profile, allowedProfiles);
+  const expectedTask = process.env.TASK;
+  const expectedProfile = process.env.REQUEST_PROFILE;
+  const expectedDigest = process.env.EXPECTED_REQUEST_DIGEST;
+  const base = process.env.BASE_SHA;
+
+  if (
+    reviewed.task !== expectedTask ||
+    reviewed.profile !== expectedProfile ||
+    requestDigest !== expectedDigest
+  ) {
+    throw new Error('Request changed after preflight');
+  }
+  if (profile.kind !== 'registered-task' || !isEngineSelfTask(reviewed.task)) {
+    throw new Error('already-satisfied is restricted to objective engine synthetic tasks');
+  }
+  const current = (await api(`branches/${encodeURIComponent(baseBranch)}`)).commit.sha;
+  if (!base || current !== base) {
+    throw new Error('Base changed after preflight');
+  }
+
+  const marker = `<!-- ia-dev:already-satisfied:${requestDigest} -->`;
+  const comments = await apiAll(`issues/${issueNumber}/comments`);
+  const existing = comments.some(comment => comment.user.type === 'Bot' && comment.body.includes(marker));
+  if (!existing) {
+    await api(`issues/${issueNumber}/comments`, 'POST', {
+      body: `${marker}\nObjective acceptance already passes on base \`${base}\`. No model execution or proposal was required. Evidence: ${runUrl}`
+    });
+  }
+  if (issue.state !== 'closed') {
+    await api(`issues/${issueNumber}`, 'PATCH', { state: 'closed', state_reason: 'completed' });
+  }
+  console.log(JSON.stringify(publish({ status: 'already-satisfied', issue: String(issueNumber) })));
 
 } else if (mode === 'publish') {
   const patch = readFileSync('bundle/change.patch', 'utf8');
