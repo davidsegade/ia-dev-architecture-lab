@@ -1,8 +1,27 @@
 import assert from 'node:assert/strict';
-import { pathToFileURL } from 'node:url';
+import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
+import { realpathSync } from 'node:fs';
 const [task, directory] = process.argv.slice(2);
-const api = await import(pathToFileURL(resolve(directory, 'src/main.mjs')));
+// Assertions stay in this trusted process. Candidate modules cannot monkey-patch them.
+const api=Object.fromEntries(['clamp','chunk','sumCents'].map(method=>[method,(...args)=>{
+  const driver=realpathSync(resolve(import.meta.dirname,'invoke.mjs'));
+  const candidate=realpathSync(directory);
+  // The candidate runs in a separate process. Its module-level changes cannot alter
+  // this trusted assertion process; the controller has already constrained paths.
+  const result=spawnSync(process.execPath,['--permission',`--allow-fs-read=${driver}`,`--allow-fs-read=${candidate}`,driver,candidate,method],{
+    env:{PATH:process.env.PATH,LANG:'en_US.UTF-8'},encoding:'utf8',timeout:1000,maxBuffer:100000,
+    input:JSON.stringify(args,(_,value)=>typeof value==='number' && !Number.isFinite(value)?{$number:String(value)}:value)
+  });
+  if(result.status!==0)throw new Error(result.error?.code||result.stderr||'Candidate failed');
+  const response=JSON.parse(result.stdout.trim().split('\n').at(-1));
+  if(method==='chunk' && response.ok) assert.deepEqual(response.args,args,'Input was mutated');
+  if(!response.ok) {
+    const Constructor={TypeError,RangeError,Error}[response.error?.name]||Error;
+    throw new Constructor(response.error?.message||'Candidate error');
+  }
+  return response.value;
+}]));
 let cases = 0;
 function check(fn) { fn(); cases++; }
 if (task === 'clamp') {

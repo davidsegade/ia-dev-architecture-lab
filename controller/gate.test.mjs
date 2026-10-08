@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, cpSync, writeFileSync, rmSync, symlinkSync } from 'node:fs';
+import { mkdtempSync, cpSync, writeFileSync, rmSync, symlinkSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve, join } from 'node:path';
 import { inspectPatch, verify } from './gate.mjs';
@@ -12,6 +12,9 @@ function fixture(callback) {
   try {
     cpSync(join(root,'src'),join(directory,'src'),{recursive:true});
     cpSync(join(root,'tests'),join(directory,'tests'),{recursive:true});
+    // Negative fixtures must not become valid when a synthetic task is merged.
+    writeFileSync(join(directory,'src/main.mjs'),'export function clamp(v,l,h){return v;} export function chunk(v,s){return [v];} export function sumCents(){return 0;}');
+    writeFileSync(join(directory,'tests/main.test.mjs'),"import test from 'node:test'; import assert from 'node:assert/strict'; import {clamp,chunk,sumCents} from '../src/main.mjs'; test('baseline',()=>{assert.equal(clamp(2,0,5),2);assert.deepEqual(chunk([1],1),[[1]]);assert.equal(sumCents([]),0);});");
     return callback(directory);
   } finally {rmSync(directory,{recursive:true,force:true});}
 }
@@ -45,3 +48,26 @@ test('hanging candidate is terminated',()=>fixture(directory=>{
   writeFileSync(join(directory,'tests/main.test.mjs'),'// no-op\n');
   const start=Date.now();assert.throws(()=>verify(root,'clamp',directory),/ETIMEDOUT/); assert.ok(Date.now()-start<10000);
 }));
+test('candidate cannot disable trusted assertions',()=>fixture(directory=>{
+  writeFileSync(join(directory,'src/main.mjs'),"import assert from 'node:assert/strict'; assert.equal=()=>{}; assert.throws=()=>{}; export function clamp(v){return v;} export function chunk(v){return [v];} export function sumCents(){return 0;}");
+  writeFileSync(join(directory,'tests/main.test.mjs'),'// no-op\n');
+  assert.throws(()=>verify(root,'clamp',directory));
+}));
+test('independent candidate process cannot write files',()=>fixture(directory=>{
+  const denied=join(directory,'forbidden.txt');
+  writeFileSync(join(directory,'src/main.mjs'),`import {writeFileSync} from 'node:fs'; writeFileSync(${JSON.stringify(denied)},'forbidden'); export function clamp(v){return v;}`);
+  writeFileSync(join(directory,'tests/main.test.mjs'),'// no-op\n');
+  assert.throws(()=>verify(root,'clamp',directory));
+  assert.equal(existsSync(denied),false);
+}));
+test('independent chunk acceptance detects input mutation',()=>fixture(directory=>{
+  writeFileSync(join(directory,'src/main.mjs'),`export function chunk(v,s){const chunks=[];while(v.length)chunks.push(v.splice(0,s));return chunks;}`);
+  writeFileSync(join(directory,'tests/main.test.mjs'),'// no-op\n');
+  assert.throws(()=>verify(root,'chunk',directory),/Input was mutated/);
+}));
+test('literal path dots cannot widen the publication allowlist',()=>{
+  assert.throws(()=>inspectPatch(validPatch.replaceAll('src/main.mjs','src/mainXmjs')),/Unauthorized path/);
+});
+test('protected paths take precedence over broad allowed paths',()=>{
+  assert.throws(()=>inspectPatch(validPatch.replaceAll('src/main.mjs','src/private.mjs'),['src/**'],['src/private.mjs']),/Protected path/);
+});
