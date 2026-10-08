@@ -68,8 +68,6 @@ function requiredReviewFiles() {
   return names;
 }
 
-// Derived before any model runs. Once the reviewer has spoken, the set of files it had to
-// read must not be whatever the sandbox happens to hold afterwards.
 const reviewTargets = mode === 'review' ? requiredReviewFiles() : [];
 
 const model = mode === 'write' ? 'opencode/mimo-v2.6-flash-free' : 'opencode/space-bunny-free';
@@ -107,7 +105,7 @@ let feedback = process.env.FEEDBACK_BASE64
 
 for (let attempt = 1; attempt <= (mode === 'write' ? 2 : 1); attempt++) {
   const scoped = `The sandbox holds only these files: ${sandboxFiles.join(', ')}.`;
-  const writeScope = `Only edit files matching these write patterns: ${writePaths.join(', ')}. Other sandbox files are read-only context.`;
+  const writeScope = `Only edit files matching these patterns: ${writePaths.join(', ')}. These are write paths; other sandbox files are read-only context.`;
   const acceptance = sandboxFiles.includes('package.json')
     ? 'Run the acceptance and build commands.'
     : 'This sandbox has no package.json, so do not attempt the acceptance or build commands.';
