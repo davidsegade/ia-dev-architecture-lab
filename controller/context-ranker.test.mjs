@@ -1,22 +1,24 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { rankGraph, validateGraph, RANKED_CONTEXT_CHAR_BUDGET } from './context-ranker.mjs';
+import { GRAPH_ADAPTER_VERSION, rankGraph, validateGraph, RANKED_CONTEXT_CHAR_BUDGET } from './context-ranker.mjs';
 
 function graph() {
   return {
-    graph: { schema_version: 1, graphify_version: '0.9.80' },
     nodes: [
-      { id: 'route', label: 'createRoutedGpx', source_file: 'src/routes/create-route.ts', node_kind: 'function' },
-      { id: 'weather', label: 'analyzeRouteWeather', source_file: 'src/routes/weather.ts', node_kind: 'function' },
-      { id: 'routeTest', label: 'createRoutedGpx test', source_file: 'tests/create-route.test.ts', node_kind: 'test' },
-      { id: 'auth', label: 'login', source_file: 'src/auth/login.ts', node_kind: 'function' },
-      { id: 'misc', label: 'helper', source_file: 'src/misc/helper.ts', node_kind: 'function' }
+      { id: 'route', label: 'createRoutedGpx()', source_file: 'src/routes/create-route.ts', file_type: 'code' },
+      { id: 'weather', label: 'analyzeRouteWeather()', source_file: 'src/routes/weather.ts', file_type: 'code' },
+      { id: 'routeTest', label: 'createRoutedGpx test', source_file: 'tests/create-route.test.ts', file_type: 'code' },
+      { id: 'auth', label: 'login()', source_file: 'src/auth/login.ts', file_type: 'code' },
+      { id: 'misc', label: 'helper()', source_file: 'src/misc/helper.ts', file_type: 'code' }
     ],
-    links: [
-      { source: 'route', target: 'weather', type: 'calls' },
-      { source: 'route', target: 'routeTest', type: 'tested_by' },
-      { source: 'auth', target: 'misc', type: 'calls' }
-    ]
+    edges: [
+      { source: 'route', target: 'weather', relation: 'calls' },
+      { source: 'route', target: 'routeTest', relation: 'tested_by' },
+      { source: 'auth', target: 'misc', relation: 'calls' }
+    ],
+    hyperedges: [],
+    input_tokens: 0,
+    output_tokens: 0
   };
 }
 
@@ -45,16 +47,22 @@ test('ranker obeys file and character budgets', () => {
   assert.ok(result.chars <= RANKED_CONTEXT_CHAR_BUDGET);
 });
 
-test('unsupported graph schema fails closed', () => {
-  const bad = graph();
-  bad.graph.schema_version = 2;
-  assert.throws(() => validateGraph(bad), /Unsupported Graphify schema/);
+test('published Graphify graph contract accepts nodes edges hyperedges and token counters', () => {
+  const valid = validateGraph(graph());
+  assert.equal(valid.nodes.length, 5);
+  assert.equal(rankGraph(valid, 'route').schemaVersion, GRAPH_ADAPTER_VERSION);
 });
 
-test('unexpected Graphify version fails closed', () => {
+test('missing edges array fails closed', () => {
   const bad = graph();
-  bad.graph.graphify_version = '9.9.9';
-  assert.throws(() => rankGraph(bad, 'route'), /Unexpected Graphify version/);
+  delete bad.edges;
+  assert.throws(() => validateGraph(bad), /edges array missing/);
+});
+
+test('malformed Graphify edges fail closed', () => {
+  const bad = graph();
+  bad.edges = [{ source: 'route' }];
+  assert.throws(() => validateGraph(bad), /malformed edge/);
 });
 
 test('graphs without source-backed nodes fail closed', () => {
