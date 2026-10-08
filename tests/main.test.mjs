@@ -76,3 +76,46 @@ test('clamp throws RangeError when minimum exceeds maximum', () => {
   assert.throws(() => clamp(-2, -1, -3), RangeError);
   assert.throws(() => clamp(0.5, 0.2, 0.1), RangeError);
 });
+
+test('chunk splits values into consecutive arrays of at most size', () => {
+  assert.deepEqual(chunk([1, 2, 3], 1), [[1], [2], [3]]);
+  assert.deepEqual(chunk([1, 2, 3], 2), [[1, 2], [3]]);
+  assert.deepEqual(chunk([1, 2, 3, 4, 5], 3), [[1, 2, 3], [4, 5]]);
+  assert.deepEqual(chunk(['a', 'b', 'c', 'd'], 4), [['a', 'b', 'c', 'd']]);
+  assert.deepEqual(chunk([1, 2, 3, 4], 5), [[1, 2, 3, 4]]);
+});
+
+test('chunk returns [] for an empty array', () => {
+  assert.deepEqual(chunk([], 1), []);
+  assert.deepEqual(chunk([], 10), []);
+});
+
+test('chunk does not mutate the input', () => {
+  const input = [1, 2, 3, 4];
+  const copy = [...input];
+  const result = chunk(input, 2);
+  assert.deepEqual(input, copy);
+  assert.notEqual(result[0], input);
+  result[0].push(99);
+  assert.deepEqual(input, copy);
+});
+
+test('chunk throws TypeError for non-array values', () => {
+  for (const bad of ['1,2', null, undefined, true, {}, 5, { 0: 1, length: 1 }]) {
+    assert.throws(() => chunk(bad, 1), TypeError);
+  }
+  assert.throws(() => chunk(), TypeError);
+});
+
+test('chunk throws RangeError for invalid sizes', () => {
+  for (const bad of [0, -1, -10, 1.5, NaN, Infinity, -Infinity, 2n, '2', null, undefined, true, {}, () => {}]) {
+    assert.throws(() => chunk([1, 2], bad), RangeError);
+  }
+  assert.throws(() => chunk([1, 2]), RangeError);
+  assert.throws(() => chunk([1, 2], Number.MAX_SAFE_INTEGER + 1), RangeError);
+});
+
+test('chunk validates the array before the size', () => {
+  assert.throws(() => chunk('nope', 0), TypeError);
+  assert.throws(() => chunk(null, -1), TypeError);
+});
