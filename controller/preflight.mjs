@@ -20,10 +20,13 @@ export function evaluateSyntheticPreflight({
   writePaths = getWritePaths(),
   acceptanceCommand = 'npm test',
   buildCommand = 'npm run build',
+  targetRepo = null,
+  engineRepo = null,
   verifyFn = verify
 }) {
   const profile = profileFor(requestProfile);
-  if (profile.kind !== 'registered-task' || !isEngineSelfTask(task)) {
+  const wrongRepository = targetRepo && engineRepo && targetRepo !== engineRepo;
+  if (wrongRepository || profile.kind !== 'registered-task' || !isEngineSelfTask(task)) {
     return { alreadySatisfied: false, eligible: false, acceptance: null };
   }
 
@@ -32,8 +35,6 @@ export function evaluateSyntheticPreflight({
     const acceptance = verifyFn(candidate, task, candidate, writePaths, acceptanceCommand, buildCommand);
     return { alreadySatisfied: acceptance?.passed === true, eligible: true, acceptance };
   } catch {
-    // Objective acceptance failures mean work is still required. The normal author and
-    // independent verification path remains responsible for producing and validating it.
     return { alreadySatisfied: false, eligible: true, acceptance: null };
   }
 }
@@ -45,7 +46,9 @@ if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.dirname,
     requestProfile: process.env.REQUEST_PROFILE || 'legacy-synthetic',
     workspaceRoot: process.env.WORKSPACE_ROOT || '.',
     acceptanceCommand: process.env.ACCEPTANCE_COMMAND || 'npm test',
-    buildCommand: process.env.BUILD_COMMAND || 'npm run build'
+    buildCommand: process.env.BUILD_COMMAND || 'npm run build',
+    targetRepo: process.env.TARGET_REPO || process.env.GITHUB_REPOSITORY || null,
+    engineRepo: process.env.IA_DEV_ENGINE_REPOSITORY || null
   });
   const published = output({
     'already-satisfied': String(result.alreadySatisfied),
