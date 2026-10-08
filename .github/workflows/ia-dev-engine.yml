@@ -91,16 +91,16 @@ jobs:
         if: hashFiles('target/package-lock.json') != ''
         run: npm ci --no-audit --no-fund
         working-directory: target
-      - name: Install pinned OpenCode
-        run: npm install --prefix "$RUNNER_TEMP/opencode" --no-audit --no-fund opencode-ai@1.18.35
-        working-directory: target
+      - name: Install locked OpenCode toolchain
+        run: npm ci --no-audit --no-fund
+        working-directory: .ia-dev-engine/toolchain
       - name: Discover runtime OpenCode models
         id: models
         run: node "$IA_DEV_ENGINE/controller/discover-models.mjs"
         working-directory: target
         env:
           IA_DEV_ENGINE: ${{ github.workspace }}/.ia-dev-engine
-          OPENCODE_BIN: ${{ runner.temp }}/opencode/node_modules/.bin/opencode
+          OPENCODE_BIN: ${{ github.workspace }}/.ia-dev-engine/toolchain/node_modules/.bin/opencode
       - name: Execute scoped author
         run: node "$IA_DEV_ENGINE/controller/agent.mjs" write "$TASK"
         working-directory: target
@@ -109,7 +109,7 @@ jobs:
           TASK: ${{ needs.prepare.outputs.task }}
           REQUEST_PROFILE: ${{ needs.prepare.outputs.profile }}
           TASK_SPEC_BASE64: ${{ needs.prepare.outputs.specification }}
-          OPENCODE_BIN: ${{ runner.temp }}/opencode/node_modules/.bin/opencode
+          OPENCODE_BIN: ${{ github.workspace }}/.ia-dev-engine/toolchain/node_modules/.bin/opencode
           AVAILABLE_MODELS_BASE64: ${{ steps.models.outputs.models }}
           RUNTIME_MODEL_DISCOVERY_REQUIRED: 'true'
           FEEDBACK_BASE64: ${{ needs.prepare.outputs.feedback }}
@@ -227,16 +227,16 @@ jobs:
           ACCEPTANCE_COMMAND: ${{ fromJSON(needs.prepare.outputs.target-config).acceptance_command }}
           BUILD_COMMAND: ${{ fromJSON(needs.prepare.outputs.target-config).build_command }}
           WORKSPACE_ROOT: ${{ fromJSON(needs.prepare.outputs.target-config).workspace_root }}
-      - name: Install pinned OpenCode
-        run: npm install --prefix "$RUNNER_TEMP/opencode" --no-audit --no-fund opencode-ai@1.18.35
-        working-directory: target
+      - name: Install locked OpenCode toolchain
+        run: npm ci --no-audit --no-fund
+        working-directory: .ia-dev-engine/toolchain
       - name: Discover runtime OpenCode models
         id: models
         run: node "$IA_DEV_ENGINE/controller/discover-models.mjs"
         working-directory: target
         env:
           IA_DEV_ENGINE: ${{ github.workspace }}/.ia-dev-engine
-          OPENCODE_BIN: ${{ runner.temp }}/opencode/node_modules/.bin/opencode
+          OPENCODE_BIN: ${{ github.workspace }}/.ia-dev-engine/toolchain/node_modules/.bin/opencode
       - name: Independent read-only review
         run: node "$IA_DEV_ENGINE/controller/agent.mjs" review "$TASK"
         working-directory: target
@@ -245,7 +245,7 @@ jobs:
           TASK: ${{ needs.prepare.outputs.task }}
           REQUEST_PROFILE: ${{ needs.prepare.outputs.profile }}
           TASK_SPEC_BASE64: ${{ needs.prepare.outputs.specification }}
-          OPENCODE_BIN: ${{ runner.temp }}/opencode/node_modules/.bin/opencode
+          OPENCODE_BIN: ${{ github.workspace }}/.ia-dev-engine/toolchain/node_modules/.bin/opencode
           AVAILABLE_MODELS_BASE64: ${{ steps.models.outputs.models }}
           RUNTIME_MODEL_DISCOVERY_REQUIRED: 'true'
           CONTEXT_PATHS: ${{ toJSON(fromJSON(needs.prepare.outputs.target-config).context_paths) }}
