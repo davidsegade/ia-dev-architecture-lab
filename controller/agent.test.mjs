@@ -292,10 +292,13 @@ test('a blocked test command does not replace independent acceptance of actual e
   assert.equal(runResult(root,'write').attempts[0].acceptance.cases,11);
 });
 
-test('the retry loop gives up on a provider failure and retries an acceptance failure', () => {
+test('provider failures rotate approved models without consuming acceptance retry', () => {
   const source = agentSource();
   assert.match(source, /class ProviderFailure extends Error \{\}/);
-  assert.match(source, /if \(error instanceof ProviderFailure\) break;/);
+  assert.match(source, /if \(runtimeInventory\.length === 0\) break;/);
+  assert.match(source, /modelIndex\+\+/);
+  assert.match(source, /acceptanceAttempt\+\+/);
+  assert.match(source, /class PolicyFailure extends Error \{\}/);
   assert.match(source, /record\.usage = freeUsage\(result\.stdout\)/);
 });
 
