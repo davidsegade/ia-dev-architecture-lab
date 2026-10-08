@@ -77,7 +77,11 @@ test('a hanging GET is aborted and eventually reports a bounded timeout', async 
   let calls = 0;
   const api = client((url, options) => new Promise((resolve, reject) => {
     calls++;
-    options.signal.addEventListener('abort', () => Object.assign(reject(new Error('aborted')), { name: 'AbortError' }));
+    options.signal.addEventListener('abort', () => {
+      const error = new Error('aborted');
+      error.name = 'AbortError';
+      reject(error);
+    });
   }), { getRetries: 1, timeoutMs: 5 });
   await assert.rejects(() => api.request('branches/main'), /timed out/);
   assert.equal(calls, 2);
