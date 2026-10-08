@@ -22,11 +22,11 @@ test('unrelated labels cannot retrigger an already labeled request', () => {
   assert.match(source, /github\.event\.action == 'labeled' && github\.event\.label\.name == 'ia-dev'/);
 });
 
-test('prepare and failure lifecycle use paginated history', () => {
+test('prepare failure and already-satisfied lifecycle use paginated history', () => {
   const source = github();
   assert.match(source, /apiAll\('pulls\?state=all'\)/);
   const comments = source.match(/apiAll\(`issues\/\$\{issueNumber\}\/comments`\)/g) || [];
-  assert.equal(comments.length, 2, 'prepare and failure must both scan complete comment history');
+  assert.equal(comments.length, 3, 'prepare, failure and already-satisfied must scan complete comment history');
   assert.doesNotMatch(source, /per_page=100/);
 });
 
