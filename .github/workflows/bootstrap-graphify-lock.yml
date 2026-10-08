@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "toolchain/graphify-requirements.in"
+      - "toolchain/graphify-requirements.lock"
       - ".github/workflows/bootstrap-graphify-lock.yml"
 
 permissions:
@@ -19,9 +20,14 @@ jobs:
           persist-credentials: false
       - name: Create isolated Python environment
         run: python3 -m venv "$RUNNER_TEMP/graphify-lock"
-      - name: Resolve exact Graphify environment
+      - name: Install committed Graphify lock exactly
+        run: "$RUNNER_TEMP/graphify-lock/bin/python" -m pip install --disable-pip-version-check --no-input --no-deps -r toolchain/graphify-requirements.lock
+      - name: Verify lock resolves exact Graphify version
         run: |
-          "$RUNNER_TEMP/graphify-lock/bin/python" -m pip install --disable-pip-version-check --no-input -r toolchain/graphify-requirements.in
-          "$RUNNER_TEMP/graphify-lock/bin/python" -m pip freeze > toolchain/graphify-requirements.lock
-      - name: Emit generated lockfile for bootstrap
-        run: printf 'GRAPHIFY_LOCK_BASE64=%s\n' "$(base64 -w0 toolchain/graphify-requirements.lock)"
+          test "$("$RUNNER_TEMP/graphify-lock/bin/python" -c 'import importlib.metadata; print(importlib.metadata.version("graphifyy"))')" = "0.9.80"
+      - name: Smoke-test real code-only extraction
+        run: |
+          mkdir -p "$RUNNER_TEMP/graphify-smoke/input"
+          printf 'export function createRoute(x) { return x; }\n' > "$RUNNER_TEMP/graphify-smoke/input/route.js"
+          "$RUNNER_TEMP/graphify-lock/bin/graphify" extract "$RUNNER_TEMP/graphify-smoke/input" --code-only --no-cluster --max-workers 1 --out "$RUNNER_TEMP/graphify-smoke/output"
+          node -e 'const fs=require("fs");const p=process.env.RUNNER_TEMP+"/graphify-smoke/output/graphify-out/graph.json";const g=JSON.parse(fs.readFileSync(p,"utf8"));if(g.graph?.schema_version!==1||g.graph?.graphify_version!=="0.9.80"||!Array.isArray(g.nodes)||g.nodes.length===0)process.exit(1);console.log(JSON.stringify({schema:g.graph.schema_version,version:g.graph.graphify_version,nodes:g.nodes.length}));'
