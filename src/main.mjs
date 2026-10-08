@@ -13,4 +13,19 @@ export function clamp(value, minimum, maximum) {
   return value;
 }
 export function chunk(values, size) { return [values]; }
-export function sumCents(values) { return 0; }
+export function sumCents(values) {
+  if (!Array.isArray(values)) {
+    throw new TypeError('sumCents expects an array');
+  }
+  let total = 0;
+  for (const value of values) {
+    if (!Number.isSafeInteger(value)) {
+      throw new TypeError('sumCents expects safe integer elements');
+    }
+    total += value;
+    if (!Number.isSafeInteger(total)) {
+      throw new RangeError('sum exceeds safe integer range');
+    }
+  }
+  return total;
+}
