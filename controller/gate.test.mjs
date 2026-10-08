@@ -12,6 +12,9 @@ function fixture(callback) {
   try {
     cpSync(join(root,'src'),join(directory,'src'),{recursive:true});
     cpSync(join(root,'tests'),join(directory,'tests'),{recursive:true});
+    // Negative fixtures must not become valid when a synthetic task is merged.
+    writeFileSync(join(directory,'src/main.mjs'),'export function clamp(v,l,h){return v;} export function chunk(v,s){return [v];} export function sumCents(){return 0;}');
+    writeFileSync(join(directory,'tests/main.test.mjs'),"import test from 'node:test'; import assert from 'node:assert/strict'; import {clamp,chunk,sumCents} from '../src/main.mjs'; test('baseline',()=>{assert.equal(clamp(2,0,5),2);assert.deepEqual(chunk([1],1),[[1]]);assert.equal(sumCents([]),0);});");
     return callback(directory);
   } finally {rmSync(directory,{recursive:true,force:true});}
 }

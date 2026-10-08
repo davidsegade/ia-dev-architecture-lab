@@ -282,6 +282,15 @@ test('permission denial stops without repeating a broken configuration',()=>{
   assert.equal(runResult(root,'write').attempts.length,1);
   assert.match(runResult(root,'write').attempts[0].error,/Agent permission denied/);
 });
+test('a blocked test command does not replace independent acceptance of actual edits',()=>{
+  const {root}=repository();
+  const code='export function clamp(v,l,h){if(![v,l,h].every(x=>typeof x==="number"&&Number.isFinite(x)))throw new TypeError();if(l>h)throw new RangeError();return Math.min(h,Math.max(l,v));} export function chunk(v){return [v];} export function sumCents(){return 0;}';
+  const binary=fakeAgent(root,'fake-test-denied.sh',script([`printf '%s\\n' '${code}' > src/main.mjs`,{type:'tool_use',part:{tool:'bash',state:{status:'error',error:'The user has specified a rule which prevents you from using this specific tool call.'}}},ZERO_COST,APPROVAL]));
+  const {status}=spawnAgent(['write',TASK],{OPENCODE_BIN:binary},root);
+  assert.equal(status,0);
+  assert.equal(runResult(root,'write').success,true);
+  assert.equal(runResult(root,'write').attempts[0].acceptance.cases,11);
+});
 
 test('the retry loop gives up on a provider failure and retries an acceptance failure', () => {
   const source = agentSource();

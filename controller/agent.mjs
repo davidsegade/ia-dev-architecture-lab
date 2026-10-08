@@ -146,7 +146,7 @@ for (let attempt = 1; attempt <= (mode === 'write' ? 2 : 1); attempt++) {
       throw new ProviderFailure(error.message);
     }
     const denied=result.stdout.split('\n').some(line=>{
-      try{const event=JSON.parse(line);return event.type==='tool_use' && event.part?.state?.status==='error' && /rule which prevents|permission.*denied/i.test(event.part.state.error||'');}catch{return false;}
+      try{const event=JSON.parse(line);return event.type==='tool_use' && ['edit','write','apply_patch'].includes(event.part?.tool) && event.part?.state?.status==='error' && /rule which prevents|permission.*denied/i.test(event.part.state.error||'');}catch{return false;}
     });
     if(denied)throw new ProviderFailure('Agent permission denied; controller configuration must be corrected');
 
