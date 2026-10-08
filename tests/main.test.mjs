@@ -76,3 +76,54 @@ test('clamp throws RangeError when minimum exceeds maximum', () => {
   assert.throws(() => clamp(-2, -1, -3), RangeError);
   assert.throws(() => clamp(0.5, 0.2, 0.1), RangeError);
 });
+
+test('chunk splits values into consecutive groups of at most size', () => {
+  assert.deepEqual(chunk([1, 2, 3, 4, 5], 2), [[1, 2], [3, 4], [5]]);
+  assert.deepEqual(chunk([1, 2, 3], 5), [[1, 2, 3]]);
+  assert.deepEqual(chunk([1, 2, 3, 4], 4), [[1, 2, 3, 4]]);
+  assert.deepEqual(chunk([1, 2, 3, 4], 1), [[1], [2], [3], [4]]);
+});
+
+test('chunk handles exact multiples and single elements', () => {
+  assert.deepEqual(chunk(['a', 'b', 'c', 'd'], 2), [['a', 'b'], ['c', 'd']]);
+  assert.deepEqual(chunk([7], 1), [[7]]);
+  assert.deepEqual(chunk([1, 2, 3], 3), [[1, 2, 3]]);
+  assert.deepEqual(chunk([], 3), []);
+});
+
+test('chunk preserves input order and skips nothing', () => {
+  const values = [10, 20, 30, 40, 50, 60];
+  const flattened = chunk(values, 4).flat();
+  assert.deepEqual(flattened, values);
+  assert.equal(chunk(values, 4).length, 2);
+  assert.equal(chunk(values, 5).length, 2);
+});
+
+test('chunk does not mutate the input array', () => {
+  const values = [1, 2, 3, 4, 5];
+  const copy = [...values];
+  const result = chunk(values, 2);
+  assert.deepEqual(values, copy);
+  result[0].push(99);
+  assert.deepEqual(values, copy);
+});
+
+test('chunk throws TypeError for non-array values', () => {
+  for (const bad of ['12', null, undefined, true, {}, 3, Symbol('x'), 2n, () => 1]) {
+    assert.throws(() => chunk(bad, 1), TypeError);
+  }
+  assert.throws(() => chunk(), TypeError);
+  assert.throws(() => chunk(null, 2), TypeError);
+});
+
+test('chunk throws RangeError for invalid sizes', () => {
+  for (const bad of [0, -1, -10, 1.5, -2.5, NaN, Infinity, -Infinity, '2', null, undefined, true, {}, [], Symbol('2'), 2n, () => 2, Number.MAX_SAFE_INTEGER + 2, 2 ** 53]) {
+    assert.throws(() => chunk([1, 2, 3], bad), RangeError);
+  }
+  assert.throws(() => chunk([1]), RangeError);
+});
+
+test('chunk reports TypeError before RangeError', () => {
+  assert.throws(() => chunk('nope', 0), TypeError);
+  assert.throws(() => chunk(null, -1), TypeError);
+});
