@@ -1,38 +1,68 @@
-# IA DEV architecture laboratory
+# IA DEV 2.0 architecture laboratory
 
-This repository contains synthetic functions only. It is not a product repository and contains no personal data, credentials or code from existing projects.
+This repository is the isolated architecture and safety laboratory for IA DEV 2.0. It contains synthetic functions only. It is not a product repository and must not contain personal data, credentials or code copied from existing projects.
 
-## Flow
+No real project is enabled until the closure criteria below are verified.
 
-An owner-created issue carrying the `ia-dev` label and `task: clamp`, `task: chunk`, or `task: sumCents` starts one queued workflow. The controller uses a registered task specification, not executable instructions supplied in issue text.
+## Supported architecture
 
-OpenCode 1.18.34 runs through its official non-interactive CLI on an ephemeral Ubuntu runner. Big Pickle writes code in a separate working directory, with no GitHub or model credentials in its child environment. At most two attempts are allowed per workflow, each limited to three minutes. Protected paths and independent acceptance are checked locally before exporting a patch.
+The supported entrypoint is `.github/workflows/ia-dev-engine.yml`, a reusable `workflow_call` workflow. A target repository uses a minimal caller workflow and references this repository by an exact commit SHA. GitHub's reusable-workflow identity (`job.workflow_repository` and `job.workflow_sha`) is then used inside every job, so the engine executed by a run is the same immutable engine revision selected by the caller.
 
-A fresh runner reapplies the patch to the recorded base and verifies protected-file scope, author tests, syntax and independent acceptance. A separate runner reviews with Space Bunny Free, with editing and shell access denied. Missing, invalid or negative review verdicts block publication. No paid-model fallback is configured.
+The target repository's own `GITHUB_TOKEN` remains repository-scoped. No PAT, billing credential, model API key or shared cross-project write token is required. The caller grants the union of permissions needed by the reusable workflow; the called workflow reduces permissions again per job. Author, verifier and reviewer jobs are read-only. Only trusted publication and bounded failure/retry reporting receive write scopes.
 
-Only a final trusted publishing job receives write permission. It checks the artifact digest and unchanged base, applies the verified patch without executing candidate code, creates a deterministic branch and opens a PR. Acceptance and review statuses refer to that exact commit. GitHub branch protection must require these statuses and human approval. No workflow merges a PR.
+An owner-created issue selects a task through a line containing only `task: <registered-task>`. Issue prose is not executable instruction. The engine-owned `config/repositories.yml` decides which repositories, tasks, paths and acceptance/build commands are allowed.
 
-## Recovery and limits
+## Execution flow
 
-The issue and workflow run persist independently of the Mac. An execution that fails publishes a failure notice and keeps its evidence for seven days. Failed runs receive bounded automatic retries with verifier feedback. An explicit cancellation remains stopped; a workflow-dispatch retry accepts an existing issue number. The same issue never generates a second proposal when a PR already exists; after three failed runs it stops. Recovery restarts from the recorded task; it does not promise to restore a live agent process.
+1. **Prepare** validates the owner-created issue, repository allowlist, registered task, duplicate/retry state and records the base SHA.
+2. **Execute** checks out that base and the immutable engine. For Node targets with a committed `package-lock.json`, dependencies are installed with `npm ci`. OpenCode 1.18.35 runs the scoped author with `opencode/mimo-v2.6-flash-free`. The child process receives no GitHub/model credentials and can edit only allowlisted files.
+3. **Verify** starts from a clean checkout of the recorded base, reapplies the exported patch and independently runs path protection plus the engine-owned acceptance/build policy. The patch digest is recorded.
+4. **Review** starts again from the recorded base, reapplies and re-verifies the patch, then runs a distinct read-only OpenCode reviewer with `opencode/space-bunny-free`. Missing file inspection, malformed verdicts, findings or a negative verdict fail closed.
+5. **Publish** rechecks the patch digest and unchanged base, then creates a fresh disposable branch unique to the workflow run/attempt. It uses a normal push only; force-push is forbidden. A draft PR is opened with engine SHA, base SHA, verified/published head SHA, patch digest, author model, reviewer model and Actions evidence. IA DEV never merges or marks its own PR ready.
+6. **Recover** records failure evidence and verifier feedback. If the issue is still open and fewer than three failed runs exist, a new clean workflow run is dispatched. Retries never rewrite an existing proposal branch.
 
-Workflows are serialized; the queue holds at most GitHub's supported queue capacity. A canceled run may require a deliberate retry. No scheduled polling or permanent server is installed. An owner can disable the workflow to stop new work; deletion of this laboratory removes its execution setup.
+## Idempotency and rollback
+
+Idempotency follows the logical issue rather than a deterministic branch name. An existing IA DEV proposal or ready marker prevents a second proposal for the same issue. Failed attempts may leave disposable branches, but those branches are never reused or force-pushed.
+
+Before merge, rollback is simply: close the draft PR and delete its disposable branch. `main` remains unchanged. An owner can also close the source issue or disable the caller workflow to stop further execution.
+
+## Human gate
+
+IA DEV publishes draft PRs and contains no merge or ready-for-review operation. GitHub therefore blocks direct merge of an IA DEV proposal until a separate actor deliberately moves it out of draft. Branch protection/rulesets should additionally require the repository's CI checks; formal review requirements can be added for multi-user repositories.
+
+The laboratory `main` branch is protected and its `test` status is required. Repository-administration details that cannot be read through the connected GitHub integration must not be claimed as verified.
 
 ## Cost boundary
 
-Use standard hosted Ubuntu runners in a public repository containing only synthetic data. Big Pickle and Space Bunny Free are currently documented as free; this is temporary availability, not a permanent entitlement. No billing account, API key, paid provider, credit purchase or automatic recharge is configured. If anonymous free access fails, the task fails. Big Pickle's free-period data may be used to improve its model, which is another reason to keep this laboratory synthetic.
+The author and reviewer are explicitly pinned to OpenCode free models and there is no paid fallback. If a free provider is unavailable, the run fails closed. GitHub-hosted runner usage and free-model availability remain external service constraints and can change; this system must not be described as permanently zero-cost or zero-maintenance.
 
-The model catalog, package versions and runtime still need maintenance. These workflow scripts are integration glue, not a permanent homemade orchestration server. They must not be represented as zero maintenance.
+OpenCode and action versions are pinned where practical. Model availability, package versions and GitHub runner behavior still require maintenance.
 
-## Acceptance status
+## Closure evidence
 
-Local controller checks and cloud execution are separate evidence. Architecture completion requires end-to-end cloud success, rejected incorrect results, recovery, duplication prevention, exact-commit validation and enforced human approval. Passing a function test alone does not satisfy this condition.
+Already demonstrated in the laboratory:
+
+- End-to-end issue -> OpenCode author -> independent acceptance -> independent reviewer -> PR using distinct free models (PR #49).
+- Rejection of incorrect synthetic implementations by trusted acceptance tests.
+- Protected-path, sandbox, permission, reviewer-read, model-separation and exact-artifact tests.
+- CI on the architecture test suite.
+
+Still required before IA DEV 2.0 is declared complete and before any real project is enabled:
+
+- Merge the reusable-engine architecture only after human review of its PR.
+- Run a fresh synthetic issue through the merged reusable workflow.
+- Demonstrate one bounded clean retry through the new reusable workflow and confirm it does not duplicate a proposal.
+- Confirm the resulting PR records the exact engine/workflow SHA and disposable branch evidence.
+
+COROS Workout, TURNEO and IA DEV 1.0 remain out of scope until those closure checks pass.
 
 ## Official references
 
 - https://opencode.ai/docs/cli/
 - https://opencode.ai/docs/github/
 - https://opencode.ai/docs/permissions/
-- https://opencode.ai/docs/zen/
+- https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows
+- https://docs.github.com/en/actions/reference/workflows-and-actions/contexts
 - https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency
 - https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches
