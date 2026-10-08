@@ -2,7 +2,7 @@ name: IA DEV laboratory
 
 on:
   issues:
-    types: [opened]
+    types: [opened, labeled]
   workflow_dispatch:
     inputs:
       issue:
@@ -29,7 +29,10 @@ jobs:
     if: >-
       (github.actor == github.repository_owner ||
       (github.actor == 'github-actions[bot]' && github.event_name == 'workflow_dispatch' && inputs.automatic == 'true')) &&
-      (github.event_name == 'workflow_dispatch' || contains(github.event.issue.labels.*.name, 'ia-dev'))
+      (github.event_name == 'workflow_dispatch' ||
+      (contains(github.event.issue.labels.*.name, 'ia-dev') &&
+      (github.event.action == 'opened' ||
+      (github.event.action == 'labeled' && github.event.label.name == 'ia-dev'))))
     uses: ./.github/workflows/ia-dev-engine.yml
     with:
       issue: ${{ github.event_name == 'workflow_dispatch' && inputs.issue || format('{0}', github.event.issue.number) }}
