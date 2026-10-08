@@ -24,7 +24,8 @@ jobs:
         run: |
           python3 -m venv "$RUNNER_TEMP/graphify-smoke"
           "$RUNNER_TEMP/graphify-smoke/bin/python" -m pip install --disable-pip-version-check --no-input --no-deps -r toolchain/graphify-requirements.lock
+          test "$("$RUNNER_TEMP/graphify-smoke/bin/python" -c 'import importlib.metadata; print(importlib.metadata.version("graphifyy"))')" = "0.9.80"
           mkdir -p "$RUNNER_TEMP/graphify-input"
           printf 'export function createRoute(x) { return x; }\n' > "$RUNNER_TEMP/graphify-input/route.js"
           "$RUNNER_TEMP/graphify-smoke/bin/graphify" extract "$RUNNER_TEMP/graphify-input" --code-only --no-cluster --max-workers 1 --out "$RUNNER_TEMP/graphify-output"
-          node -e 'const fs=require("fs");const p=process.env.RUNNER_TEMP+"/graphify-output/graphify-out/graph.json";const g=JSON.parse(fs.readFileSync(p,"utf8"));if(g.graph?.schema_version!==1||g.graph?.graphify_version!=="0.9.80"||!Array.isArray(g.nodes)||g.nodes.length===0)process.exit(1);console.log(JSON.stringify({schema:g.graph.schema_version,version:g.graph.graphify_version,nodes:g.nodes.length}));'
+          node -e 'const fs=require("fs");const p=process.env.RUNNER_TEMP+"/graphify-output/graphify-out/graph.json";const g=JSON.parse(fs.readFileSync(p,"utf8"));console.log("GRAPH_META="+JSON.stringify(g.graph));if(g.graph?.schema_version!==1||!Array.isArray(g.nodes)||g.nodes.length===0)process.exit(1);console.log(JSON.stringify({schema:g.graph.schema_version,version:g.graph.graphify_version,nodes:g.nodes.length}));'
