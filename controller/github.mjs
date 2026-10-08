@@ -138,7 +138,7 @@ if (mode === 'prepare') {
   const allowedPaths = getAllowedPaths();
   command('git', ['add', '--', ...allowedPaths], process.cwd());
   command('git', ['commit', '-m', `IA DEV: ${reviewed} for issue #${issueNumber}`], process.cwd());
-  command('git', ['push', 'origin', `HEAD:refs/heads/${branch}`], process.cwd(), 30000);
+  command('git', ['push', '--force', 'origin', `HEAD:refs/heads/${branch}`], process.cwd(), 30000);
   
   const sha = command('git', ['rev-parse', 'HEAD'], process.cwd()).trim();
   

@@ -4,9 +4,7 @@ inputs:
   target-repo:
     description: 'Target repository'
     required: true
-  target-token:
-    description: 'Token for target repo (needs write permissions)'
-    required: true
+
   base-sha:
     description: 'Base SHA'
     required: true
@@ -60,7 +58,7 @@ runs:
       working-directory: target
       env:
         IA_DEV_ENGINE: ${{ github.workspace }}/ia-dev
-        GH_TOKEN: ${{ inputs.target-token }}
+        GH_TOKEN: ${{ github.token }}
         GITHUB_REPOSITORY: ${{ inputs.target-repo }}
         EXPECTED_DIGEST: ${{ inputs.expected-digest }}
         BASE_SHA: ${{ inputs.base-sha }}
