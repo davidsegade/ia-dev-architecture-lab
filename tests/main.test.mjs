@@ -76,3 +76,61 @@ test('clamp throws RangeError when minimum exceeds maximum', () => {
   assert.throws(() => clamp(-2, -1, -3), RangeError);
   assert.throws(() => clamp(0.5, 0.2, 0.1), RangeError);
 });
+
+test('chunk splits an array into consecutive groups of at most size', () => {
+  assert.deepEqual(chunk([1, 2, 3, 4, 5], 2), [[1, 2], [3, 4], [5]]);
+  assert.deepEqual(chunk([1, 2, 3], 1), [[1], [2], [3]]);
+  assert.deepEqual(chunk([1, 2, 3, 4], 3), [[1, 2, 3], [4]]);
+  assert.deepEqual(chunk(['a', 'b', 'c', 'd', 'e', 'f'], 3), [
+    ['a', 'b', 'c'],
+    ['d', 'e', 'f'],
+  ]);
+});
+
+test('chunk returns a single group when size covers the whole array', () => {
+  assert.deepEqual(chunk([1, 2, 3], 3), [[1, 2, 3]]);
+  assert.deepEqual(chunk([1, 2, 3], 100), [[1, 2, 3]]);
+  assert.deepEqual(chunk([7], 1), [[7]]);
+});
+
+test('chunk returns an empty array for an empty input', () => {
+  assert.deepEqual(chunk([], 1), []);
+  assert.deepEqual(chunk([], 5), []);
+  assert.deepEqual(chunk([], 1000), []);
+});
+
+test('chunk preserves order and does not mutate the input', () => {
+  const input = [1, 2, 3, 4, 5];
+  const copy = [...input];
+  const result = chunk(input, 2);
+  assert.deepEqual(input, copy);
+  assert.deepEqual(result.flat(), input);
+  assert.notEqual(result[0], input);
+  assert.deepEqual(chunk([1, 2, 3], 2), [[1, 2], [3]]);
+});
+
+test('chunk throws TypeError when the input is not an array', () => {
+  for (const bad of [null, undefined, '1,2,3', 42, true, false, {}, { length: 2 }, Symbol('x'), 1n, () => [1]]) {
+    assert.throws(() => chunk(bad, 1), TypeError);
+  }
+});
+
+test('chunk throws TypeError when the input is missing', () => {
+  assert.throws(() => chunk(), TypeError);
+});
+
+test('chunk throws RangeError for invalid sizes', () => {
+  for (const bad of [0, -1, -10, 1.5, 0.5, NaN, Infinity, -Infinity, '2', null, undefined, true, {}, [], Symbol('2'), 1n, () => 2]) {
+    assert.throws(() => chunk([1, 2, 3], bad), RangeError);
+  }
+});
+
+test('chunk rejects sizes that are not safe integers', () => {
+  assert.throws(() => chunk([1], Number.MAX_SAFE_INTEGER + 2), RangeError);
+  assert.throws(() => chunk([1], Number.NaN), RangeError);
+});
+
+test('chunk reports TypeError for a non-array before checking size', () => {
+  assert.throws(() => chunk('nope', 0), TypeError);
+  assert.throws(() => chunk(null, -1), TypeError);
+});
