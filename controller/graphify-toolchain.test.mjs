@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const root = join(import.meta.dirname, '..');
@@ -30,7 +30,7 @@ test('Graphify extraction is code-only bounded and single-worker', () => {
   const source = contextSource();
   assert.match(source, /'extract', '\.', '--code-only', '--no-cluster', '--max-workers', '1'/);
   assert.match(source, /timeout: 60000/);
-  assert.match(source, /Unexpected Graphify version|expectedGraphifyVersion/);
+  assert.match(source, /Unexpected installed Graphify version/);
 });
 
 test('Graphify environment contains no GitHub or model credential variables', () => {
@@ -48,4 +48,8 @@ test('ranked context is enabled only for code-change profile', () => {
   const source = agentSource();
   assert.match(source, /requestProfile === 'code-change' \? 'ranked-context' : 'legacy'/);
   assert.match(source, /contextMode === 'ranked-context'/);
+});
+
+test('temporary Graphify bootstrap workflow is absent from final architecture', () => {
+  assert.equal(existsSync(join(root, '.github/workflows/bootstrap-graphify-lock.yml')), false);
 });
