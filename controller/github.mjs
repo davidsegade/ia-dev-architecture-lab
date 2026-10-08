@@ -37,12 +37,6 @@ if (!repoConfig) {
 const baseBranch = repoConfig.base_branch || 'main';
 const allowedTasks = repoConfig.tasks?.map(t => Object.keys(t)[0]) || [];
 
-/**
- * Publishes step outputs for the calling workflow.
- *
- * Every mode that declares composite outputs goes through here, so a declared output
- * always has a real writer behind it instead of resolving to an empty string.
- */
 function publish(output) {
   for (const [key, value] of Object.entries(output)) {
     appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${value}\n`);
@@ -79,9 +73,6 @@ const [mode] = process.argv.slice(2);
 if (mode === 'prepare') {
   const task = taskFromIssue(issue.body || '', allowedTasks);
 
-  // Idempotency follows the logical issue rather than a deterministic branch name.
-  // A failed attempt may leave an orphaned disposable branch, but once any proposal was
-  // actually published (or its ready marker recorded) this issue cannot publish another.
   const pulls = await api('pulls?state=all&per_page=100');
   const comments = await api(`issues/${issueNumber}/comments?per_page=100`);
   const proposals = pulls.filter(pr => proposalBelongsToIssue(pr, issueNumber));
@@ -152,7 +143,6 @@ if (mode === 'prepare') {
   const allowedPaths = getAllowedPaths();
   command('git', ['add', '--', ...allowedPaths], process.cwd());
   command('git', ['commit', '-m', `IA DEV: ${reviewed} for issue #${issueNumber}`], process.cwd());
-  // Deliberately no --force: every run/attempt owns a fresh branch.
   command('git', ['push', 'origin', `HEAD:refs/heads/${branch}`], process.cwd(), 30000);
 
   const sha = command('git', ['rev-parse', 'HEAD'], process.cwd()).trim();
@@ -194,6 +184,21 @@ if (mode === 'prepare') {
 
   const outcome = shouldRetry(failures, issue.state, comments.length);
   console.log(JSON.stringify(publish({ retry: String(outcome), failures: String(failures) })));
+
+} else if (mode === 'retry') {
+  if (process.env.RETRY !== 'true') {
+    console.log(JSON.stringify(publish({ dispatched: 'false' })));
+  } else {
+    const workflow = String(process.env.CALLER_WORKFLOW || '');
+    if (!/^[A-Za-z0-9._-]+\.ya?ml$/.test(workflow)) {
+      throw new Error('Safe caller workflow filename required');
+    }
+    await api(`actions/workflows/${encodeURIComponent(workflow)}/dispatches`, 'POST', {
+      ref: baseBranch,
+      inputs: { issue: String(issueNumber), automatic: 'true' }
+    });
+    console.log(JSON.stringify(publish({ dispatched: 'true' })));
+  }
 } else {
   throw new Error('Unknown operation');
 }
