@@ -92,6 +92,9 @@ if (mode === 'prepare') {
     .at(-1) || '';
 
   const base = (await api(`branches/${encodeURIComponent(baseBranch)}`)).commit.sha;
+  const writePaths = repoConfig.write_paths || repoConfig.allowed_paths || [];
+  const contextPaths = repoConfig.context_paths || writePaths;
+  const sensitivePaths = repoConfig.sensitive_paths || [];
 
   const output = {
     task,
@@ -100,8 +103,12 @@ if (mode === 'prepare') {
     skip: String(skip),
     feedback: previous,
     'target-config': JSON.stringify({
-      allowed_paths: repoConfig.allowed_paths || [],
+      // allowed_paths remains the IA DEV 2.0 compatibility alias for write_paths.
+      allowed_paths: writePaths,
+      write_paths: writePaths,
+      context_paths: contextPaths,
       protected_paths: repoConfig.protected_paths || [],
+      sensitive_paths: sensitivePaths,
       acceptance_command: repoConfig.acceptance_command || 'npm test',
       build_command: repoConfig.build_command || 'npm run build',
       workspace_root: repoConfig.workspace_root || '.',
