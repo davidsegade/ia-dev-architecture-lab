@@ -5,7 +5,7 @@ import { resolve, join, relative } from 'node:path';
 import { taskCatalog } from './tasks.mjs';
 import { command, inspectPatch, verify, getAllowedPaths, getProtectedPaths } from './gate.mjs';
 import { permissionsFor } from './permissions.mjs';
-import { copyBack, changedPaths, copySandbox, withinAllowedPaths } from './sync.mjs';
+import { copyBack, changedPaths, copySandbox, withinAllowedPaths, matchesPath } from './sync.mjs';
 
 const root = process.cwd();
 const [mode, task] = process.argv.slice(2);
@@ -82,7 +82,7 @@ writeFileSync(config, JSON.stringify({
   // sandbox and produces nothing to gate on, so each mode gets the smaller budget that
   // still covers a scoped change.
   agent: { build: { steps: mode === 'write' ? 8 : 5 } },
-  permission: permissionsFor(mode, { allowedPaths, acceptanceCommand, buildCommand })
+  permission: permissionsFor(mode, { allowedPaths, acceptanceCommand, buildCommand, editPrefix: relative(root,candidate) })
 }));
 
 const childEnv = {
@@ -145,11 +145,15 @@ for (let attempt = 1; attempt <= (mode === 'write' ? 2 : 1); attempt++) {
     } catch (error) {
       throw new ProviderFailure(error.message);
     }
+    const denied=result.stdout.split('\n').some(line=>{
+      try{const event=JSON.parse(line);return event.type==='tool_use' && event.part?.state?.status==='error' && /rule which prevents|permission.*denied/i.test(event.part.state.error||'');}catch{return false;}
+    });
+    if(denied)throw new ProviderFailure('Agent permission denied; controller configuration must be corrected');
 
     const after = inventory(candidate);
     const changed = changedPaths(baseline, after);
     
-    if (!withinAllowedPaths(changed, allowedPaths)) {
+    if (!withinAllowedPaths(changed, allowedPaths) || changed.some(name=>protectedPaths.some(pattern=>matchesPath(name,pattern)))) {
       throw new Error('Protected files changed');
     }
     

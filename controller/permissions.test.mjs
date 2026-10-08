@@ -87,6 +87,11 @@ test('hidden directory names keep their leading dot',()=>{
   assert.equal(editPermissions(['.config/**'])['.config/**'],'allow');
   assert.equal(editPermissions(['.config/**'])['config/**'],undefined);
 });
+test('candidate edit permissions are anchored to its exact Git-relative directory',()=>{
+  assert.deepEqual(editPermissions(['src/main.mjs','tests/main.test.mjs'],'.work/write/candidate'),{
+    '*':'deny','.work/write/candidate/src/main.mjs':'allow','.work/write/candidate/tests/main.test.mjs':'allow'
+  });
+});
 
 test('the executor sandbox allows only allowlisted edits and policy commands', () => {
   const permissions = permissionsFor('write', POLICY);

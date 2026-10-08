@@ -215,6 +215,7 @@ test('the generated config bounds the build steps and keeps edit paths root rela
   assert.ok(edits.length > 0, 'the write sandbox allows no edit at all');
   for (const [key, value] of edits) {
     assert.equal(key.startsWith('**/'), false, `${key} is not root relative`);
+    assert.ok(key.startsWith('.work/write/candidate/'),'edit permission escaped the filtered candidate');
     assert.equal(value, 'allow');
   }
 });
@@ -263,6 +264,23 @@ test('the reviewer is gated on files derived from the repository diff', () => {
   assert.doesNotMatch(source, /reviewVerdict\(result\.stdout, changed\)/);
   // The no mutation guard stays: the read proof must not be bought by editing the sandbox.
   assert.match(source, /if \(changed\.length\) throw new Error\('Reviewer modified candidate'\)/);
+});
+test('a protected candidate change is refused before copying to the checkout',()=>{
+  const {root,modified}=repository();
+  const before=readFileSync(join(root,modified),'utf8');
+  const binary=fakeAgent(root,'fake-protected.sh',script([`printf 'export const value = 3;\\n' > ${modified}`,ZERO_COST,APPROVAL]));
+  const {status}=spawnAgent(['write',TASK],{OPENCODE_BIN:binary,PROTECTED_PATHS:JSON.stringify([modified])},root);
+  assert.equal(status,1);
+  assert.equal(runResult(root,'write').attempts[0].error,'Protected files changed');
+  assert.equal(readFileSync(join(root,modified),'utf8'),before);
+});
+test('permission denial stops without repeating a broken configuration',()=>{
+  const {root}=repository();
+  const binary=fakeAgent(root,'fake-denied.sh',script([{type:'tool_use',part:{tool:'edit',state:{status:'error',error:'The user has specified a rule which prevents you from using this specific tool call.'}}},ZERO_COST,APPROVAL]));
+  const {status}=spawnAgent(['write',TASK],{OPENCODE_BIN:binary},root);
+  assert.equal(status,1);
+  assert.equal(runResult(root,'write').attempts.length,1);
+  assert.match(runResult(root,'write').attempts[0].error,/Agent permission denied/);
 });
 
 test('the retry loop gives up on a provider failure and retries an acceptance failure', () => {
