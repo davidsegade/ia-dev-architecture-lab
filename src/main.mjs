@@ -12,5 +12,17 @@ export function clamp(value, minimum, maximum) {
   if (value > maximum) return maximum;
   return value;
 }
-export function chunk(values, size) { return [values]; }
+export function chunk(values, size) {
+  if (!Array.isArray(values)) {
+    throw new TypeError('chunk expects an array');
+  }
+  if (typeof size !== 'number' || !Number.isSafeInteger(size) || size <= 0) {
+    throw new RangeError('chunk requires a positive safe integer size');
+  }
+  const result = [];
+  for (let i = 0; i < values.length; i += size) {
+    result.push(values.slice(i, i + size));
+  }
+  return result;
+}
 export function sumCents(values) { return 0; }
