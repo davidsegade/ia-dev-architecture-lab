@@ -38,23 +38,23 @@ function publish({ body, review }) {
   }
 }
 
-test('the publish gate reads the task from the repository policy catalog', () => {
-  // The regression: publish compared the review against the engine's own synthetic task
-  // list, so a repository bringing its own task could never publish a pull request.
+test('the publish gate reads the task from this repository policy only', () => {
+  // Publication must re-check the same repository-scoped allowlist used by prepare.
+  // A built-in task that is not registered for the target repository must never become
+  // publishable merely because it exists somewhere else in the engine catalog.
   const source = githubSource();
-  assert.match(source, /taskFromIssue\(issue\.body \|\| '', Object\.keys\(taskCatalog\(\)\)\)/);
+  assert.match(source, /const allowedTasks = repoConfig\.tasks\?\.map\(t => Object\.keys\(t\)\[0\]\) \|\| \[\]/);
+  assert.match(source, /taskFromIssue\(issue\.body \|\| '', allowedTasks\)/);
+  assert.doesNotMatch(source, /Object\.keys\(taskCatalog\(\)\)/);
 });
 
-test('every taskFromIssue call site passes an explicit allowlist', () => {
-  // taskFromIssue still defaults to the engine's synthetic tasks for its own unit tests,
-  // but no controller entry point may rely on that default: a repository that brings its
-  // own task would fail every check.
+test('every taskFromIssue call site passes an explicit repository allowlist', () => {
   const calls = callArguments(githubSource(), 'taskFromIssue');
   assert.ok(calls.length >= 2, 'expected the prepare and publish branches to read the task');
   for (const args of calls) {
     assert.match(
       args,
-      /,\s*(allowedTasks|Object\.keys\(taskCatalog\(\)\))\s*$/,
+      /,\s*allowedTasks\s*$/,
       `taskFromIssue(${args}) leaves the task unchecked against the repository policy`
     );
   }
