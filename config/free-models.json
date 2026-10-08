@@ -1,0 +1,15 @@
+{
+  "verified_at": "2026-10-08",
+  "provider": "opencode",
+  "policy": "Only entries explicitly verified as Free in OpenCode Zen pricing may appear here. Runtime discovery must also report the model as available. No paid fallback.",
+  "author": [
+    { "id": "opencode/mimo-v2.6-flash-free", "cost": 0 },
+    { "id": "opencode/nemotron-3.5-lightning-free", "cost": 0 },
+    { "id": "opencode/exo-free", "cost": 0 }
+  ],
+  "reviewer": [
+    { "id": "opencode/space-bunny-free", "cost": 0 },
+    { "id": "opencode/ling-3.1-flash-free", "cost": 0 },
+    { "id": "opencode/nemotron-3-ultra-free", "cost": 0 }
+  ]
+}
