@@ -1,6 +1,9 @@
 import { basename } from 'node:path';
 
-export const GRAPH_SCHEMA_VERSION = 1;
+// IA DEV adapter contract for the published Graphify graph JSON shape. Graphify 0.9.80
+// itself does not embed a schema/version marker in graph.json, so package version is
+// verified separately by the locked toolchain installer.
+export const GRAPH_ADAPTER_VERSION = 1;
 export const RANKED_CONTEXT_CHAR_BUDGET = 6000;
 export const RANKED_CONTEXT_FILE_BUDGET = 8;
 
@@ -20,25 +23,40 @@ function normalizeFile(value) {
   return String(value || '').replaceAll('\\', '/').replace(/^\.\//, '');
 }
 
-export function validateGraph(graph, { expectedGraphifyVersion = '0.9.80' } = {}) {
+export function validateGraph(graph) {
   if (!graph || !Array.isArray(graph.nodes) || graph.nodes.length === 0) {
     throw new Error('Graphify produced no nodes');
   }
-  if (graph.graph?.schema_version !== GRAPH_SCHEMA_VERSION) {
-    throw new Error(`Unsupported Graphify schema: ${graph.graph?.schema_version ?? 'missing'}`);
+  if (!Array.isArray(graph.edges)) {
+    throw new Error('Unsupported Graphify graph: edges array missing');
   }
-  if (expectedGraphifyVersion && graph.graph?.graphify_version !== expectedGraphifyVersion) {
-    throw new Error(`Unexpected Graphify version: ${graph.graph?.graphify_version ?? 'missing'}`);
+  if (graph.hyperedges !== undefined && !Array.isArray(graph.hyperedges)) {
+    throw new Error('Unsupported Graphify graph: hyperedges must be an array');
+  }
+  if (graph.input_tokens !== undefined && !Number.isFinite(graph.input_tokens)) {
+    throw new Error('Unsupported Graphify graph: invalid input_tokens');
+  }
+  if (graph.output_tokens !== undefined && !Number.isFinite(graph.output_tokens)) {
+    throw new Error('Unsupported Graphify graph: invalid output_tokens');
+  }
+  for (const node of graph.nodes) {
+    if (!node || typeof node.id !== 'string' || !node.id) {
+      throw new Error('Unsupported Graphify graph: node id missing');
+    }
+  }
+  for (const edge of graph.edges) {
+    if (!edge || !endpoint(edge.source) || !endpoint(edge.target)) {
+      throw new Error('Unsupported Graphify graph: malformed edge');
+    }
   }
   return graph;
 }
 
 export function rankGraph(graph, specification, {
   maxFiles = RANKED_CONTEXT_FILE_BUDGET,
-  maxChars = RANKED_CONTEXT_CHAR_BUDGET,
-  expectedGraphifyVersion = '0.9.80'
+  maxChars = RANKED_CONTEXT_CHAR_BUDGET
 } = {}) {
-  validateGraph(graph, { expectedGraphifyVersion });
+  validateGraph(graph);
   const queryTerms = terms(specification);
   const nodes = graph.nodes.map((node, index) => ({
     ...node,
@@ -50,10 +68,7 @@ export function rankGraph(graph, specification, {
   const byId = new Map(nodes.map(node => [node._id, node]));
   const degree = new Map(nodes.map(node => [node._id, 0]));
   const neighbors = new Map(nodes.map(node => [node._id, new Set()]));
-  const edges = [
-    ...(Array.isArray(graph.links) ? graph.links : []),
-    ...(Array.isArray(graph.edges) ? graph.edges : [])
-  ];
+  const edges = graph.edges;
   for (const edge of edges) {
     const source = endpoint(edge.source);
     const target = endpoint(edge.target);
@@ -113,7 +128,6 @@ export function rankGraph(graph, specification, {
     }))
     .sort((a, b) => b.score - a.score || a.file.localeCompare(b.file));
 
-  // With a very generic goal, keep deterministic coverage rather than returning nothing.
   const selected = ranked.slice(0, maxFiles);
   if (!selected.length) throw new Error('Context ranker selected no files');
 
@@ -126,15 +140,15 @@ export function rankGraph(graph, specification, {
   }
   if (lines.length === 1) throw new Error('Context budget too small for ranked output');
   const text = lines.join('\n');
+  const emitted = selected.slice(0, lines.length - 1);
   return {
     text,
-    selectedFiles: selected.slice(0, lines.length - 1).map(entry => entry.file),
+    selectedFiles: emitted.map(entry => entry.file),
     rankedFiles: ranked.length,
-    selectedSymbols: selected.slice(0, lines.length - 1).reduce((sum, entry) => sum + entry.symbols.length, 0),
+    selectedSymbols: emitted.reduce((sum, entry) => sum + entry.symbols.length, 0),
     chars: text.length,
     graphNodes: nodes.length,
     graphEdges: edges.length,
-    schemaVersion: graph.graph.schema_version,
-    graphifyVersion: graph.graph.graphify_version
+    schemaVersion: GRAPH_ADAPTER_VERSION
   };
 }
