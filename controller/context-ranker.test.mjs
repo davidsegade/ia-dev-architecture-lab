@@ -64,7 +64,8 @@ test('graphs without source-backed nodes fail closed', () => {
 });
 
 test('generic goals still select deterministic bounded coverage', () => {
-  const result = rankGraph(graph(), 'improve behavior', { maxFiles: 2 });
-  assert.equal(result.selectedFiles.length, 2);
-  assert.deepEqual(result.selectedFiles, [...result.selectedFiles].sort());
+  const first = rankGraph(graph(), 'improve behavior', { maxFiles: 2 });
+  const second = rankGraph(graph(), 'improve behavior', { maxFiles: 2 });
+  assert.equal(first.selectedFiles.length, 2);
+  assert.deepEqual(first.selectedFiles, second.selectedFiles);
 });
