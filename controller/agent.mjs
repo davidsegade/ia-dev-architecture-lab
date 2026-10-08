@@ -24,16 +24,17 @@ const buildCommand = process.env.BUILD_COMMAND || 'npm run build';
 const workspaceRoot = process.env.WORKSPACE_ROOT || '.';
 const requestProfile = process.env.REQUEST_PROFILE || 'legacy-synthetic';
 const profile = profileFor(requestProfile);
-const contextMode = requestProfile === 'code-change' ? 'ranked-context' : 'legacy';
+const contextMode = profile.contextMode;
+if (!['legacy', 'ranked-context'].includes(contextMode)) throw new Error('Invalid context mode');
 
 const catalog = taskCatalog();
 const suppliedSpecification = process.env.TASK_SPEC_BASE64
   ? Buffer.from(process.env.TASK_SPEC_BASE64, 'base64').toString('utf8')
   : '';
 const specification = suppliedSpecification || catalog[task];
-const validLegacy = requestProfile === 'legacy-synthetic' && Boolean(catalog[task]);
-const validGoal = requestProfile === 'code-change' && task === 'goal' && Boolean(suppliedSpecification);
-if (!['write','review'].includes(mode) || !specification || (!validLegacy && !validGoal)) {
+const validRegistered = profile.kind === 'registered-task' && task !== 'goal' && Boolean(catalog[task]);
+const validGoal = profile.kind === 'goal' && task === 'goal' && Boolean(suppliedSpecification);
+if (!['write','review'].includes(mode) || !specification || (!validRegistered && !validGoal)) {
   throw new Error('Invalid execution');
 }
 const specificationDigest = createHash('sha256').update(specification).digest('hex');
