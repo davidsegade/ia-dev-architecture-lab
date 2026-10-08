@@ -76,3 +76,30 @@ test('clamp throws RangeError when minimum exceeds maximum', () => {
   assert.throws(() => clamp(-2, -1, -3), RangeError);
   assert.throws(() => clamp(0.5, 0.2, 0.1), RangeError);
 });
+
+test('clamp does not coerce string arguments', () => {
+  assert.throws(() => clamp('3', 0, 5), TypeError);
+  assert.throws(() => clamp(0, '1', 5), TypeError);
+  assert.throws(() => clamp(0, 0, '5'), TypeError);
+});
+
+test('clamp rejects boxed number objects', () => {
+  assert.throws(() => clamp(Object(3), 0, 5), TypeError);
+  assert.throws(() => clamp(3, Object(0), 5), TypeError);
+  assert.throws(() => clamp(3, 0, Object(5)), TypeError);
+});
+
+test('clamp handles extreme finite magnitudes', () => {
+  const big = Number.MAX_VALUE;
+  assert.equal(clamp(big, 0, 5), 5);
+  assert.equal(clamp(-big, 0, 5), 0);
+  assert.equal(clamp(Number.MIN_VALUE, 0, 1), Number.MIN_VALUE);
+  assert.equal(clamp(big, -big, big), big);
+});
+
+test('clamp error messages name the offending argument', () => {
+  assert.throws(() => clamp('x', 0, 5), { name: 'TypeError', message: /value/ });
+  assert.throws(() => clamp(0, NaN, 5), { name: 'TypeError', message: /minimum/ });
+  assert.throws(() => clamp(0, 0, Infinity), { name: 'TypeError', message: /maximum/ });
+  assert.throws(() => clamp(0, 3, 1), { name: 'RangeError', message: /minimum/ });
+});
