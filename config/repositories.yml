@@ -50,6 +50,7 @@ repositories:
       - ".env.*"
     profiles:
       - "legacy-synthetic"
+      - "ranked-synthetic"
       - "code-change"
     tasks:
       - clamp: "Implement clamp(value, minimum, maximum). All three arguments must be finite numbers or throw TypeError. If minimum > maximum throw RangeError. Return value bounded inclusively to minimum and maximum. Add tests while preserving baseline tests."
