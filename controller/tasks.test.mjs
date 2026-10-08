@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { taskCatalog, taskFromIssue, tasks } from './tasks.mjs';
+import { requestFromIssue, specificationDigest, taskCatalog, taskFromIssue, tasks } from './tasks.mjs';
 
 test('built-in synthetic tasks are always available', () => {
   for (const name of ['clamp', 'chunk', 'sumCents']) {
@@ -26,7 +26,6 @@ test('taskFromIssue explains that the marker must be alone on its line', () => {
 });
 
 test('taskFromIssue rejects literal backslash-n escapes instead of guessing', () => {
-  // A body written from a shell with double quotes keeps "\n" as two characters.
   assert.throws(
     () => taskFromIssue('task: clamp\\n\\nAdd a test.', ['clamp']),
     /must be alone on its own line/
@@ -65,4 +64,66 @@ test('a target repository cannot invent tasks when no policy is loaded', () => {
     if (previous === undefined) delete process.env.GITHUB_REPOSITORY;
     else process.env.GITHUB_REPOSITORY = previous;
   }
+});
+
+test('legacy requests remain registered-task based', () => {
+  const request = requestFromIssue('task: clamp', {
+    taskCatalog: { clamp: 'Known specification' },
+    allowedProfiles: ['legacy-synthetic']
+  });
+  assert.deepEqual(request, {
+    profile: 'legacy-synthetic',
+    task: 'clamp',
+    specification: 'Known specification'
+  });
+});
+
+test('code-change accepts a bounded free-form goal without creating policy', () => {
+  const request = requestFromIssue(
+    'profile: code-change\ngoal: Fix route creation\nPreserve existing behavior and add tests.',
+    { taskCatalog: {}, allowedProfiles: ['legacy-synthetic', 'code-change'] }
+  );
+  assert.equal(request.profile, 'code-change');
+  assert.equal(request.task, 'goal');
+  assert.equal(request.specification, 'Fix route creation\nPreserve existing behavior and add tests.');
+});
+
+test('a repository that does not allow code-change rejects it', () => {
+  assert.throws(
+    () => requestFromIssue('profile: code-change\ngoal: change code', {
+      taskCatalog: {},
+      allowedProfiles: ['legacy-synthetic']
+    }),
+    /not allowed/
+  );
+});
+
+test('code-change requires a non-empty bounded goal', () => {
+  assert.throws(
+    () => requestFromIssue('profile: code-change\ngoal:', {
+      taskCatalog: {}, allowedProfiles: ['code-change']
+    }),
+    /cannot be empty/
+  );
+  assert.throws(
+    () => requestFromIssue(`profile: code-change\ngoal: ${'x'.repeat(4001)}`, {
+      taskCatalog: {}, allowedProfiles: ['code-change']
+    }),
+    /exceeds 4000/
+  );
+});
+
+test('multiple profile markers fail closed', () => {
+  assert.throws(
+    () => requestFromIssue('profile: code-change\nprofile: code-change\ngoal: x', {
+      taskCatalog: {}, allowedProfiles: ['code-change']
+    }),
+    /Exactly one profile marker/
+  );
+});
+
+test('specification digest is stable and changes with the goal', () => {
+  assert.equal(specificationDigest('same'), specificationDigest('same'));
+  assert.notEqual(specificationDigest('same'), specificationDigest('different'));
+  assert.match(specificationDigest('same'), /^[a-f0-9]{64}$/);
 });
