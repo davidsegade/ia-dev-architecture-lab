@@ -83,12 +83,10 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '24'
-      - name: Prepare target dependencies
-        if: fromJSON(needs.prepare.outputs.target-config).setup_command != ''
-        run: sh -c "$SETUP_COMMAND"
+      - name: Install locked target dependencies
+        if: hashFiles('target/package-lock.json') != ''
+        run: npm ci --no-audit --no-fund
         working-directory: target
-        env:
-          SETUP_COMMAND: ${{ fromJSON(needs.prepare.outputs.target-config).setup_command }}
       - name: Install pinned OpenCode
         run: npm install --prefix "$RUNNER_TEMP/opencode" --no-audit --no-fund opencode-ai@1.18.35
         working-directory: target
@@ -138,12 +136,10 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '24'
-      - name: Prepare target dependencies
-        if: fromJSON(needs.prepare.outputs.target-config).setup_command != ''
-        run: sh -c "$SETUP_COMMAND"
+      - name: Install locked target dependencies
+        if: hashFiles('target/package-lock.json') != ''
+        run: npm ci --no-audit --no-fund
         working-directory: target
-        env:
-          SETUP_COMMAND: ${{ fromJSON(needs.prepare.outputs.target-config).setup_command }}
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: execution
@@ -192,12 +188,10 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '24'
-      - name: Prepare target dependencies
-        if: fromJSON(needs.prepare.outputs.target-config).setup_command != ''
-        run: sh -c "$SETUP_COMMAND"
+      - name: Install locked target dependencies
+        if: hashFiles('target/package-lock.json') != ''
+        run: npm ci --no-audit --no-fund
         working-directory: target
-        env:
-          SETUP_COMMAND: ${{ fromJSON(needs.prepare.outputs.target-config).setup_command }}
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: execution
