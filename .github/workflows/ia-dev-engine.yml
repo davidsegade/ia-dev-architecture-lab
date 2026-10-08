@@ -1,4 +1,4 @@
-name: IA DEV 2.0 engine
+name: IA DEV 2.1 engine
 
 on:
   workflow_call:
@@ -34,6 +34,8 @@ jobs:
     timeout-minutes: 3
     outputs:
       task: ${{ steps.prepare.outputs.task }}
+      profile: ${{ steps.prepare.outputs.profile }}
+      specification: ${{ steps.prepare.outputs.specification }}
       issue: ${{ steps.prepare.outputs.issue }}
       base: ${{ steps.prepare.outputs.base }}
       skip: ${{ steps.prepare.outputs.skip }}
@@ -98,6 +100,8 @@ jobs:
         env:
           IA_DEV_ENGINE: ${{ github.workspace }}/.ia-dev-engine
           TASK: ${{ needs.prepare.outputs.task }}
+          REQUEST_PROFILE: ${{ needs.prepare.outputs.profile }}
+          TASK_SPEC_BASE64: ${{ needs.prepare.outputs.specification }}
           OPENCODE_BIN: ${{ runner.temp }}/opencode/node_modules/.bin/opencode
           FEEDBACK_BASE64: ${{ needs.prepare.outputs.feedback }}
           CONTEXT_PATHS: ${{ toJSON(fromJSON(needs.prepare.outputs.target-config).context_paths) }}
@@ -223,6 +227,8 @@ jobs:
         env:
           IA_DEV_ENGINE: ${{ github.workspace }}/.ia-dev-engine
           TASK: ${{ needs.prepare.outputs.task }}
+          REQUEST_PROFILE: ${{ needs.prepare.outputs.profile }}
+          TASK_SPEC_BASE64: ${{ needs.prepare.outputs.specification }}
           OPENCODE_BIN: ${{ runner.temp }}/opencode/node_modules/.bin/opencode
           CONTEXT_PATHS: ${{ toJSON(fromJSON(needs.prepare.outputs.target-config).context_paths) }}
           WRITE_PATHS: ${{ toJSON(fromJSON(needs.prepare.outputs.target-config).write_paths) }}

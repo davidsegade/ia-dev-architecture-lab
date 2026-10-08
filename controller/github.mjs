@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, appendFileSync } from 'node:fs';
 import { command, inspectPatch, getAllowedPaths } from './gate.mjs';
-import { taskFromIssue } from './tasks.mjs';
-import { loadConfig } from './config.mjs';
+import { requestFromIssue, specificationDigest } from './tasks.mjs';
+import { loadConfig, tasksForPolicy } from './config.mjs';
 import { decision, shouldRetry, proposalBranch, proposalBelongsToIssue } from './lifecycle.mjs';
 
 const targetRepo = process.env.TARGET_REPO || process.env.GITHUB_REPOSITORY;
@@ -35,7 +35,15 @@ if (!repoConfig) {
 }
 
 const baseBranch = repoConfig.base_branch || 'main';
-const allowedTasks = repoConfig.tasks?.map(t => Object.keys(t)[0]) || [];
+const allowedTaskCatalog = tasksForPolicy(repoConfig);
+const allowedProfiles = repoConfig.profiles || ['legacy-synthetic'];
+
+function parseRequest() {
+  return requestFromIssue(issue.body || '', {
+    taskCatalog: allowedTaskCatalog,
+    allowedProfiles
+  });
+}
 
 function publish(output) {
   for (const [key, value] of Object.entries(output)) {
@@ -71,7 +79,7 @@ if (issue.user.login !== targetRepo.split('/')[0] || issue.pull_request) {
 const [mode] = process.argv.slice(2);
 
 if (mode === 'prepare') {
-  const task = taskFromIssue(issue.body || '', allowedTasks);
+  const request = parseRequest();
 
   const pulls = await api('pulls?state=all&per_page=100');
   const comments = await api(`issues/${issueNumber}/comments?per_page=100`);
@@ -97,13 +105,14 @@ if (mode === 'prepare') {
   const sensitivePaths = repoConfig.sensitive_paths || [];
 
   const output = {
-    task,
+    task: request.task,
+    profile: request.profile,
+    specification: Buffer.from(request.specification, 'utf8').toString('base64'),
     issue: issueNumber,
     base,
     skip: String(skip),
     feedback: previous,
     'target-config': JSON.stringify({
-      // allowed_paths remains the IA DEV 2.0 compatibility alias for write_paths.
       allowed_paths: writePaths,
       write_paths: writePaths,
       context_paths: contextPaths,
@@ -117,7 +126,7 @@ if (mode === 'prepare') {
   };
 
   publish(output);
-  console.log(JSON.stringify({ ...output, failed, reason }));
+  console.log(JSON.stringify({ ...output, specification: '[base64]', failed, reason }));
 
 } else if (mode === 'publish') {
   const patch = readFileSync('bundle/change.patch', 'utf8');
@@ -129,9 +138,14 @@ if (mode === 'prepare') {
 
   const review = JSON.parse(readFileSync('bundle/review-result.json', 'utf8'));
   const author = JSON.parse(readFileSync('bundle/write-result.json', 'utf8'));
-  const reviewed = taskFromIssue(issue.body || '', allowedTasks);
-  if (!author.success || author.task !== reviewed || !review.success || review.task !== reviewed || review.approved !== true || review.findings?.length !== 0 || author.model === review.model) {
-    throw new Error('Independent review missing');
+  const reviewed = parseRequest();
+  const requestDigest = specificationDigest(reviewed.specification);
+  if (
+    !author.success || author.task !== reviewed.task || author.profile !== reviewed.profile || author.specificationDigest !== requestDigest ||
+    !review.success || review.task !== reviewed.task || review.profile !== reviewed.profile || review.specificationDigest !== requestDigest ||
+    review.approved !== true || review.findings?.length !== 0 || author.model === review.model
+  ) {
+    throw new Error('Independent review missing or request changed');
   }
 
   const current = (await api(`branches/${encodeURIComponent(baseBranch)}`)).commit.sha;
@@ -149,7 +163,7 @@ if (mode === 'prepare') {
 
   const allowedPaths = getAllowedPaths();
   command('git', ['add', '--', ...allowedPaths], process.cwd());
-  command('git', ['commit', '-m', `IA DEV: ${reviewed} for issue #${issueNumber}`], process.cwd());
+  command('git', ['commit', '-m', `IA DEV: ${reviewed.task} for issue #${issueNumber}`], process.cwd());
   command('git', ['push', 'origin', `HEAD:refs/heads/${branch}`], process.cwd(), 30000);
 
   const sha = command('git', ['rev-parse', 'HEAD'], process.cwd()).trim();
@@ -163,7 +177,7 @@ if (mode === 'prepare') {
     head: branch,
     base: baseBranch,
     draft: true,
-    body: `IA DEV execution for issue #${issueNumber}.\n\nIndependent acceptance and review passed. Author: ${author.model}. Reviewer: ${review.model}.\n\nEngine/workflow SHA: \`${process.env.IA_DEV_ENGINE_SHA || 'not recorded'}\`. Base: \`${current}\`. Verified/published head: \`${sha}\`. Artifact SHA-256: \`${digest}\`.\n\nEvidence: ${runUrl}\n\nHuman approval required. No automatic merge. This proposal branch is disposable and is never force-pushed.`
+    body: `IA DEV execution for issue #${issueNumber}.\n\nProfile: ${reviewed.profile}. Independent acceptance and review passed. Author: ${author.model}. Reviewer: ${review.model}.\n\nEngine/workflow SHA: \`${process.env.IA_DEV_ENGINE_SHA || 'not recorded'}\`. Base: \`${current}\`. Verified/published head: \`${sha}\`. Artifact SHA-256: \`${digest}\`. Specification SHA-256: \`${requestDigest}\`.\n\nEvidence: ${runUrl}\n\nHuman approval required. No automatic merge. This proposal branch is disposable and is never force-pushed.`
   });
 
   await api(`issues/${issueNumber}/comments`, 'POST', {
@@ -172,7 +186,7 @@ if (mode === 'prepare') {
 
   const publication = publish({ 'pr-url': pr.html_url, 'pr-sha': sha });
   console.log(JSON.stringify(publication));
-  writeFileSync('bundle/publication.json', JSON.stringify({ url: pr.html_url, sha, digest, branch, base: current }, null, 2));
+  writeFileSync('bundle/publication.json', JSON.stringify({ url: pr.html_url, sha, digest, requestDigest, profile: reviewed.profile, branch, base: current }, null, 2));
 
 } else if (mode === 'failure') {
   let feedback = '';

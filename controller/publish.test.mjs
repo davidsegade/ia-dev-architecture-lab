@@ -38,26 +38,22 @@ function publish({ body, review }) {
   }
 }
 
-test('the publish gate reads the task from this repository policy only', () => {
-  // Publication must re-check the same repository-scoped allowlist used by prepare.
-  // A built-in task that is not registered for the target repository must never become
-  // publishable merely because it exists somewhere else in the engine catalog.
+test('the publish gate reads tasks and profiles from this repository policy only', () => {
   const source = githubSource();
-  assert.match(source, /const allowedTasks = repoConfig\.tasks\?\.map\(t => Object\.keys\(t\)\[0\]\) \|\| \[\]/);
-  assert.match(source, /taskFromIssue\(issue\.body \|\| '', allowedTasks\)/);
+  assert.match(source, /const allowedTaskCatalog = tasksForPolicy\(repoConfig\)/);
+  assert.match(source, /const allowedProfiles = repoConfig\.profiles \|\| \['legacy-synthetic'\]/);
+  assert.match(source, /taskCatalog: allowedTaskCatalog/);
+  assert.match(source, /allowedProfiles/);
   assert.doesNotMatch(source, /Object\.keys\(taskCatalog\(\)\)/);
 });
 
-test('every taskFromIssue call site passes an explicit repository allowlist', () => {
-  const calls = callArguments(githubSource(), 'taskFromIssue');
-  assert.ok(calls.length >= 2, 'expected the prepare and publish branches to read the task');
-  for (const args of calls) {
-    assert.match(
-      args,
-      /,\s*allowedTasks\s*$/,
-      `taskFromIssue(${args}) leaves the task unchecked against the repository policy`
-    );
-  }
+test('requestFromIssue receives explicit repository task and profile policy', () => {
+  const calls = callArguments(githubSource(), 'requestFromIssue');
+  assert.equal(calls.length, 1, 'request parsing should be centralized');
+  assert.match(calls[0], /taskCatalog:\s*allowedTaskCatalog/);
+  assert.match(calls[0], /allowedProfiles/);
+  assert.match(githubSource(), /const request = parseRequest\(\)/);
+  assert.match(githubSource(), /const reviewed = parseRequest\(\)/);
 });
 
 /** Argument lists of every call to `name`, with nested parentheses balanced. */
