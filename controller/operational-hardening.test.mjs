@@ -7,10 +7,11 @@ const root = join(import.meta.dirname, '..');
 const laboratory = () => readFileSync(join(root, '.github/workflows/laboratory.yml'), 'utf8');
 const github = () => readFileSync(join(import.meta.dirname, 'github.mjs'), 'utf8');
 
-test('laboratory responds to opened and labeled issue events', () => {
+test('laboratory authorizes issue execution only when ia-dev is explicitly labeled', () => {
   const source = laboratory();
-  assert.match(source, /types: \[opened, labeled\]/);
-  assert.match(source, /github\.event\.action == 'opened'/);
+  assert.match(source, /types: \[labeled\]/);
+  assert.doesNotMatch(source, /types: \[opened/);
+  assert.doesNotMatch(source, /github\.event\.action == 'opened'/);
   assert.match(source, /github\.event\.action == 'labeled'/);
   assert.match(source, /github\.event\.label\.name == 'ia-dev'/);
 });
