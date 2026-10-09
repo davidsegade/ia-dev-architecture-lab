@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { contextModeForRole, profileFor, profiles } from './profiles.mjs';
 
 test('engine owns the supported request profiles and their limits', () => {
-  assert.deepEqual(Object.keys(profiles).sort(), ['code-change', 'legacy-synthetic', 'ranked-synthetic']);
+  assert.deepEqual(Object.keys(profiles).sort(), ['code-change', 'legacy-review-diff-synthetic', 'legacy-synthetic', 'ranked-synthetic']);
   assert.equal(profiles['legacy-synthetic'].kind, 'registered-task');
   assert.equal(profiles['legacy-synthetic'].contextMode, 'legacy');
   assert.equal(profiles['legacy-synthetic'].authorContextMode, 'legacy');

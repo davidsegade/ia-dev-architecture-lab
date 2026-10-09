@@ -17,6 +17,15 @@ export const profiles = Object.freeze({
     reviewerAttempts: 1,
     maxGoalChars: 0
   }),
+  'legacy-review-diff-synthetic': Object.freeze({
+    kind: 'registered-task',
+    contextMode: 'legacy',
+    authorContextMode: 'legacy',
+    reviewerContextMode: 'review-diff',
+    authorAttempts: 2,
+    reviewerAttempts: 1,
+    maxGoalChars: 0
+  }),
   'code-change': Object.freeze({
     kind: 'goal',
     contextMode: 'ranked-context',
