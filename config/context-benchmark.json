@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "task": "sumCents",
+  "trials": 3,
+  "arms": [
+    "legacy-synthetic",
+    "legacy-review-diff-synthetic",
+    "ranked-synthetic"
+  ],
+  "models": {
+    "author": "opencode/mimo-v2.6-flash-free",
+    "reviewer": "opencode/space-bunny-free"
+  },
+  "authorMs": 240000,
+  "reviewerMs": 120000,
+  "totalMs": 3600000
+}

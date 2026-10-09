@@ -43,7 +43,24 @@ test('architecture lab alone enables ranked synthetic measurement', () => {
   const turneo = policyFor('davidsegade/TURNEO-Flutter', repositories);
   assert.ok(lab.profiles.includes('ranked-synthetic'));
   assert.equal(turneo.profiles.includes('ranked-synthetic'), false);
+  assert.ok(lab.profiles.includes('legacy-review-diff-synthetic'));
+  assert.equal(turneo.profiles.includes('legacy-review-diff-synthetic'), false);
   assert.ok(tasksForPolicy(lab).chunk);
+});
+
+test('role-isolation control preserves registered tasks and all execution budgets', () => {
+  const control = profiles['legacy-review-diff-synthetic'];
+  const legacy = profiles['legacy-synthetic'];
+  const ranked = profiles['ranked-synthetic'];
+  assert.equal(control.kind, legacy.kind);
+  assert.equal(control.authorContextMode, legacy.authorContextMode);
+  assert.equal(control.reviewerContextMode, ranked.reviewerContextMode);
+  assert.equal(control.authorAttempts, legacy.authorAttempts);
+  assert.equal(control.reviewerAttempts, legacy.reviewerAttempts);
+  assert.equal(control.maxGoalChars, 0);
+  assert.throws(() => requestFromIssue('profile: legacy-review-diff-synthetic\ngoal: arbitrary change', {
+    taskCatalog: { sumCents: 'fixed spec' }, allowedProfiles: ['legacy-review-diff-synthetic']
+  }), /registered synthetic task is required/);
 });
 
 test('ranked synthetic cannot turn a free-form goal into a task', () => {
