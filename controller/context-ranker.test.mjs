@@ -79,3 +79,53 @@ test('generic goals still select deterministic bounded coverage', () => {
   assert.equal(first.selectedFiles.length, 2);
   assert.deepEqual(first.selectedFiles, second.selectedFiles);
 });
+
+test('camel-case task identifiers find domain helpers and same-stem tests without graph edges', () => {
+  const benchmark = {
+    nodes: [
+      { id: 'sum', label: 'sumCents()', source_file: 'src/main.mjs' },
+      { id: 'baseline', label: 'main.test.mjs', source_file: 'tests/main.test.mjs' },
+      { id: 'safe', label: 'assertSafeCents()', source_file: 'fixtures/money/safe-integer.mjs' },
+      { id: 'add', label: 'safeAddCents()', source_file: 'fixtures/money/accumulator.mjs' },
+      { id: 'normalize', label: 'normalizeCents()', source_file: 'fixtures/money/cents-policy.mjs' },
+      ...Array.from({ length: 12 }, (_, i) => ({
+        id: `unrelated-${i}`, label: 'values()', source_file: `fixtures/unrelated/values-${i}.mjs`
+      }))
+    ],
+    edges: []
+  };
+  const result = rankGraph(benchmark,
+    'Implement sumCents(values). Require safe integer values. Return the exact sum. Add tests preserving baseline tests.',
+    { maxFiles: 5 });
+  assert.deepEqual(new Set(result.selectedFiles), new Set([
+    'src/main.mjs', 'tests/main.test.mjs', 'fixtures/money/safe-integer.mjs',
+    'fixtures/money/accumulator.mjs', 'fixtures/money/cents-policy.mjs'
+  ]));
+});
+
+test('associated regression files remain within the configured navigation budgets', () => {
+  const input = {
+    nodes: [
+      { id: 'source', label: 'sumCents()', source_file: 'src/main.mjs' },
+      { id: 'test', label: 'main.test.mjs', source_file: 'tests/main.test.mjs' }
+    ], edges: []
+  };
+  const result = rankGraph(input, 'Implement sumCents and add tests', { maxFiles: 2, maxChars: 250 });
+  assert.ok(result.selectedFiles.includes('tests/main.test.mjs'));
+  assert.ok(result.selectedFiles.includes('src/main.mjs'));
+  assert.ok(result.chars <= 250);
+  assert.deepEqual(rankGraph(input, 'Implement sumCents and add tests', { maxFiles: 1 }).selectedFiles,
+    ['src/main.mjs']);
+  assert.deepEqual(result, rankGraph(input, 'Implement sumCents and add tests', { maxFiles: 2, maxChars: 250 }));
+});
+
+test('same-stem matching does not promote an unrelated test filename', () => {
+  const input = {
+    nodes: [
+      { id: 'source', label: 'sumCents()', source_file: 'src/main.mjs' },
+      { id: 'test', label: 'login.test.mjs', source_file: 'tests/login.test.mjs' }
+    ], edges: []
+  };
+  assert.deepEqual(rankGraph(input, 'Implement sumCents and add tests', { maxFiles: 1 }).selectedFiles,
+    ['src/main.mjs']);
+});

@@ -8,10 +8,23 @@ export const RANKED_CONTEXT_CHAR_BUDGET = 6000;
 export const RANKED_CONTEXT_FILE_BUDGET = 8;
 
 function terms(text) {
-  return [...new Set(String(text || '')
+  const source = String(text || '');
+  const splitIdentifiers = source.replace(/([a-z0-9])([A-Z])/g, '$1 $2');
+  return [...new Set(`${source} ${splitIdentifiers}`
     .toLowerCase()
     .match(/[a-z0-9_.$-]{2,}/g) || [])]
-    .filter(term => !['the','and','for','with','from','this','that','into','only','files','code','change'].includes(term));
+    .filter(term => !['the','and','for','with','from','this','that','into','only','files','code','change',
+      'implement','require','must','return','throw','typeerror','rangeerror','type','error','range',
+      'value','values','number','numbers','invalid','empty','exact','every','remain','negative',
+      'allowed','non-array','add','preserve','baseline'].includes(term));
+}
+
+function isTestFile(file) {
+  return /(?:^|\/)(?:tests?|specs?)\/|\.(?:test|spec)\.[^.]+$/i.test(file);
+}
+
+function sourceStem(file) {
+  return basename(file).replace(/(?:\.(?:test|spec))?\.[^.]+$/i, '').toLowerCase();
 }
 
 function endpoint(value) {
@@ -81,7 +94,7 @@ export function rankGraph(graph, specification, {
 
   const directScores = new Map();
   for (const node of nodes) {
-    const label = String(node.label || node.name || node._id).toLowerCase();
+    const label = String(node.label || node.name || node._id).toLowerCase().replace(/\(\)$/, '');
     const file = node._file.toLowerCase();
     const base = basename(file);
     const kind = String(node.node_kind || node.type || node.file_type || '').toLowerCase();
@@ -117,6 +130,22 @@ export function rankGraph(graph, specification, {
       score
     });
     files.set(node._file, record);
+  }
+
+  // Graphify may emit only a file node for tests, without an import/test edge.
+  // Keep same-stem regression files competitive when the goal asks for tests.
+  if (queryTerms.some(term => /^(?:tests?|specs?|regression)$/.test(term))) {
+    const sourceScores = new Map();
+    for (const record of files.values()) {
+      if (isTestFile(record.file)) continue;
+      const stem = sourceStem(record.file);
+      sourceScores.set(stem, Math.max(sourceScores.get(stem) || 0, record.score));
+    }
+    for (const record of files.values()) {
+      if (!isTestFile(record.file)) continue;
+      const relatedScore = sourceScores.get(sourceStem(record.file));
+      if (relatedScore > 0) record.score = Math.max(record.score, relatedScore - 0.01);
+    }
   }
 
   const ranked = [...files.values()]
