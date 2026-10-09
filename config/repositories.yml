@@ -35,6 +35,7 @@ repositories:
     context_paths:
       - "src/**"
       - "tests/**"
+      - "fixtures/context-benchmark/**"
       - "package.json"
     write_paths:
       - "src/main.mjs"

@@ -81,11 +81,26 @@ test('real repository policy defines explicit context, write and sensitive scope
   try {
     const lab = policyFor('davidsegade/ia-dev-architecture-lab', loadConfig());
     assert.deepEqual(lab.write_paths, ['src/main.mjs', 'tests/main.test.mjs']);
-    assert.deepEqual(lab.context_paths, ['src/**', 'tests/**', 'package.json']);
+    assert.deepEqual(lab.context_paths, ['src/**', 'tests/**', 'fixtures/context-benchmark/**', 'package.json']);
     assert.deepEqual(lab.sensitive_paths, ['.env', '.env.*']);
     assert.ok(lab.context_paths.length >= lab.write_paths.length);
   } finally {
     if (previous === undefined) delete process.env.CONFIG_PATH;
     else process.env.CONFIG_PATH = previous;
   }
+});
+
+test('real benchmark fixtures are readable context but cannot be published', () => {
+  withEnv({ CONFIG_PATH: join(process.cwd(), 'config', 'repositories.yml') }, () => {
+    const lab = policyFor('davidsegade/ia-dev-architecture-lab', loadConfig());
+    const candidate = mkdtempSync(join(tmpdir(), 'ia-dev-benchmark-context-'));
+    const fixture = 'fixtures/context-benchmark/money/cents-policy.mjs';
+    const copied = copySandbox(process.cwd(), candidate, lab.context_paths, lab.sensitive_paths);
+    assert.ok(copied.includes(fixture));
+    assert.equal(existsSync(join(candidate, fixture)), true);
+    const patch = `diff --git a/${fixture} b/${fixture}\nindex 1111111..2222222 100644\n--- a/${fixture}\n+++ b/${fixture}\n@@ -1 +1 @@\n-old\n+new\n`;
+    assert.throws(() => inspectPatch(patch, lab.write_paths, lab.protected_paths),
+      /Unauthorized path: fixtures\/context-benchmark\/money\/cents-policy\.mjs/);
+    assert.deepEqual(lab.write_paths, ['src/main.mjs', 'tests/main.test.mjs']);
+  });
 });
